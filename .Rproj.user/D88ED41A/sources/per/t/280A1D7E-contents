@@ -1,0 +1,479 @@
+---
+title: "Homework 3: Conway's Game of Life Report"
+subtitle: "Experiment Executing with Open MP and OpenACC with Multicore and GPU"
+author: "Vichearith Meas"
+date: "4/5/2022"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+    css: style.css
+---
+
+```{r include=FALSE}
+knitr::opts_chunk$set(message=FALSE, warning=FALSE)
+```
+
+# Introduction
+
+Conway's Game of Life is a classic cellular automata grid problem that has a few simple rules but can simulate much more complex behavior based on an initial state. It is an undecidable problem which means there is no algorithm that can determine its final state by looking at its initial state. Therefore, we can only simulate the grid to see how the cells on the grid behave after many iterations.
+
+Simulating such a grid problem requires a lot of computational power. The duration to run this cellular automata grid problem will increase significantly as we increase the grid size and/or the number of iterations.
+
+The goal of this experiment is to take a profiler-driven approach to analyze the original sequential code attempt to see which parallelized version performs best as we scale the **problem size**.
+
+
+# Profiling Sequential Version
+
+The `gnu` profiler provides useful information about how much time was spent on each function. With such information, I can determine and prioritize which section of the code I should parallelize for maximum improvement.
+
+### Running Profiling
+
+To run the profiling:
+
+```{r eval=FALSE, class.source="code-block"}
+==================== In Terminal ===========================
+#  make file
+make gol_seq_prof
+# run profiling for 500 iterations
+./gol_seq_prof -i 500 -v
+
+```
+
+The result from the profiling shows in the table below:
+
+| %time | cumulative seconds | self seconds | calls | self ms/call | total ms/call | name         |
+|------:|--------------------|-------------:|------:|-------------:|--------------:|:-------------|
+| 82.59 | 29.24              |        29.24 |   500 |        58.47 |         58.47 | apply_rules  |
+| 17.30 | 35.36              |         6.13 |   500 |        12.25 |         12.25 | update_grid  |
+|  0.11 | 35.40              |         0.04 |   500 |         0.08 |          0.08 | init_ghosts  |
+|  0.08 | 35.43              |         0.03 |     1 |        30.07 |         30.07 | init_grid    |
+|  0.03 | 35.44              |         0.01 |       |              |               | main         |
+|  0.00 | 35.44              |         0.00 |   500 |         0.00 |         70.81 | gol          |
+|  0.00 | 35.44              |         0.00 |     1 |         0.00 |          0.00 | getArguments |
+|  0.00 | 35.44              |         0.00 |     1 |         0.00 |          0.00 | isNumber     |
+
+### Which functions to parallelize?
+
+The `apply_rules` and `update_grid` take 99.89% of total run time. Even though, `init_ghosts` and `init_grid` also has for loop, these two function take less than a percent of run time so we can effectively ignore these two functions and focus on paralleling **`apply_rules`** and **`update_grid`**.
+
+### Running Sequential Code
+
+For reference, I run the the sequential version of the code for 2048x2048 grid problem for 500 iterations. The total time is 33.83 second as shown below.
+
+There is also the number of `Alive` cell shown in the output. This number is used to make sure that each parallel version of code produce the same output for the given seed.
+
+```{r eval=FALSE, class.source="code-block"}
+====== In Terminal ========
+./gol_seq -i 500 -v
+
+------ Output -------
+     0, 1146561
+    50, 500606
+   100, 396624
+   150, 349394
+   200, 313307
+   250, 290900
+   300, 272903
+   350, 258330
+   400, 245678
+   450, 235231
+Total Alive: 227784
+total time: 33.839070 s
+---------------------
+```
+
+# Code Updates
+
+## `2-OpenMP` folder
+
+I record the performance after update one function `apply_rule()` after update both `apply_rule()` and `update_grid()` by adding `#pragema omp parallel for`. Below is the total time to execute a 2048x2048 grid problem for 500 iterations:
+
+| Number of thread | Update 1 Function | Update 2 Function |
+|:----------------:|------------------:|------------------:|
+|        2         |         58.042865 |         33.118001 |
+|        4         |         34.161993 |         18.457829 |
+|        8         |         20.072423 |          9.659125 |
+|        16        |         15.908876 |          5.795811 |
+
+In this section, I added an `omp` pragma to enable parallel for loop so that the loop can be split among threads.
+
+The updated codes:
+
+```{r, class.source="code-block", eval=FALSE}
+================ gol_omp.c =======================
+int apply_rules(int *grid, int *newGrid, int dim) {
+    int i,j;
+    int num_alive = 0;
+    int id, numNeighbors;
+
+    // UPDATED: add pragma to parallelize outer loop
+    #pragma omp parallel for shared(dim, grid, newGrid) \
+    private(i, j, id,numNeighbors) reduction(+:num_alive) default(none)
+    for (i = 1; i <= dim; i++) {
+        for (j = 1; j <= dim; j++) {
+            ...
+        }
+    }
+    return num_alive;
+}
+
+
+void update_grid(int *grid, int *newGrid, int dim) {
+    int i,j;
+    int id;
+
+  // UPDATED: add pragma to parallelize outer loop
+    #pragma omp parallel for shared(grid, dim, newGrid) private(i, j, id) default(none)
+    for(i = 1; i <= dim; i++) {
+        for(j = 1; j <= dim; j++) {
+            id = i*(dim+2) + j;
+            grid[id] = newGrid[id];
+        }
+    }
+}
+
+```
+
+## `3-multicore` folder
+
+In this section, I added an `acc` pragma to enable parallel for loop so that the loop can be split among multiple processor. This pragma is very similar to `omp` pragma except we are using `acc` instead of `omp` library.
+
+The performance (duration) in executing a 2048x2048 grid problem for 500 iterations after update one function `apply_rule()` and after update both `apply_rule()` and `update_grid()` for MultiCore version using `#pragma acc parallel loop`:
+
+| Number of thread | Update 1 Function | Update 2 Function |
+|:----------------:|------------------:|------------------:|
+|        2         |          9.236453 |          8.721899 |
+|        4         |          5.741613 |          4.697461 |
+|        8         |          4.765214 |          2.829085 |
+|        16        |          3.466500 |          1.522757 |
+
+```{r, class.source="code-block", eval=FALSE}
+=================== gol_mc.c ===============================
+  
+int apply_rules(int *grid, int *newGrid, int dim) {
+    int i,j;
+    int num_alive = 0;
+    int id, numNeighbors;
+
+    // UPDATED: add pragma to parallelize outer loop with `openacc`
+    #pragma acc parallel loop private(i,j,id, numNeighbors) reduction(+:num_alive)
+    for (i = 1; i <= dim; i++) {
+        for (j = 1; j <= dim; j++) {
+            ...
+        }
+    }
+    return num_alive;
+}
+
+
+void update_grid(int *grid, int *newGrid, int dim) {
+    int i,j;
+    int id;
+
+    // UPDATED: add pragma to parallelize outer loop with `openacc`
+    #pragma acc parallel loop private(i,j,id)
+    for(i = 1; i <= dim; i++) {
+        for(j = 1; j <= dim; j++) {
+            id = i*(dim+2) + j;
+            grid[id] = newGrid[id];
+        }
+    }
+}
+
+```
+
+## `4-openacc-gpu` folder
+
+In this version, I added `acc kernels` and `acc loop` pragmas. A kernels is basically a declaration for specific chunk of code to be executed on the GPU. The `independent` key word used after each `acc loop` pragma is to manually reinforce the compiler to go ahead and modify data at `i` and `j` position because there will be no race condition.
+
+The performance (duration) in executing a 2048x2048 grid problem for 500 iterations after update one function `apply_rule()` and after update both `apply_rule()` and `update_grid()` using `#pragma acc kernels`:
+
+| Number of thread | Update 1 Function | Update 2 Function |
+|:----------------:|------------------:|:-----------------:|
+|       GPU        |          9.545550 |     4.619229      |
+
+```{r, class.source="code-block",eval=FALSE}
+int apply_rules(int *grid, int *newGrid, int dim) 
+// void apply_rules(int *grid, int *newGrid, int dim) 
+{
+    int i,j;
+    int num_alive = 0;
+    int id, numNeighbors;
+
+    // UPDATED: Add pragma
+    #pragma acc kernels
+    #pragma acc loop independent reduction(+:num_alive)
+    for (i = 1; i <= dim; i++) {
+        #pragma acc loop independent
+        for (j = 1; j <= dim; j++) {
+            ...
+        }
+    }
+    return num_alive;
+}
+
+void update_grid(int *grid, int *newGrid, int dim) {
+    int i,j;
+    int id;
+
+    // UPDATED: Add pragma
+    #pragma acc kernels 
+    #pragma acc loop independent
+    for(i = 1; i <= dim; i++) {
+        #pragma acc loop independent
+        for(j = 1; j <= dim; j++) {
+            id = i*(dim+2) + j;
+            grid[id] = newGrid[id];
+        }
+    }
+}
+
+
+```
+
+# Data Collection
+
+## Running Bash code
+
+I created three Bash files to run automate tests for all four versions of code. There three Bash files are:
+
+-   `01_seq_run_strong_test`: run strong tests on sequential version code
+
+    To run script: `bash 01_seq_run_strong_test.sh [number of test runtimes]`
+
+-   `02_03_strong_test`: run strong tests on 2-OMP version and 3-MultiCore version code
+
+    To run script:`bash 02_03_strong_test.sh [number of test runtimes] [path to test file]`
+
+-   `04_gpu_run_strong_test`: run strong tests on the GPU version code
+
+    To run script: `bash 04_gpu_run_strong_test.sh [number of test runtimes]`
+
+## Methodology
+
+The grid dimension (problem size) executed in these test are **1024** **1448** **2048** **2896** **4096** **5793** and **8192.** I choose to start from 1024 because this seems to be a good starting point for all versions of code. The upper bound is set at 8192x8192 because at this size, the sequential code already takes around 600 seconds to finish on a test. It will take too much time if I increase the problem size beyond this point.
+
+However, I need to acknowledge that this might not be the best stopping point for showcasing the increased performance of the `GPU` version since a much bigger problem size is where the `GPU` version standout.
+
+Uniquely for the `OMP` and `MultiCore` versions, I also need to specify the number of threads. In these two cases, I run the codes for various thread numbers: 2,4,8, and 16.
+
+## Run Experiment and Data Collection
+
+In my experiment, I run each corresponding Bash script for each code version and save the results to `.tsv` files. Then I import the `.tsv` files for data visualization in RStudio.
+
+For each test, I set `[test run times]` to 5.
+
+Scripts to generate test results:
+
+```{r, class.source="code-block",eval=FALSE}
+=============== In Terminal ===================
+---------------
+# 1-Sequential version
+bash 01_seq_run_strong_test 5 > 01_result_trial_1.tsv &
+  
+# 2-OMP version
+bash 02_03_strong_test.sh 5 2-openMP/gol_omp >  02_result_trial_2.tsv & 
+  
+# 3-MultiCore version
+bash 02_03_strong_test.sh 5 3-MultiCore/gol_mc >  03_result_trial_2.tsv & 
+
+# 4-openacc-gpu version
+bash 04_gpu_run_strong_test.sh 5 >  04_result_trial_2.tsv & 
+
+```
+
+# Result and Analysis
+
+## Importing Data
+
+I import all the data in `TSV` format into RStudio to calculate the median duration for each thread for each problem size.
+
+For OMP and MultiCore versions, there are multiple threads therefore, multiple duration depends on the number of threads used. Therefore, I graph the duration for each case for both OMP and MultiCore to decide from which thread number should I use the median duration for the comparison with GPU and sequential.
+
+```{r include=FALSE}
+#  Read Data in from TSV files
+library(readr)
+library(ggplot2)
+library(tidyverse)
+library(egg)
+```
+
+```{r include=FALSE}
+result_sq <- as.data.frame(read_delim("445s22/hw-3-gameoflife-openacc-vichym/01_result_trial_1.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)) %>% rename(num_threads = `#th`)
+result_omp <- as.data.frame(read_delim("445s22/hw-3-gameoflife-openacc-vichym/02_result_trial_2.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)) %>% rename(num_threads = `#th`)
+result_mc <- as.data.frame(read_delim("445s22/hw-3-gameoflife-openacc-vichym/03_result_trial_2.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE)) %>% rename(num_threads = `#th`)
+result_gpu <- as.data.frame(read_delim("445s22/hw-3-gameoflife-openacc-vichym/04_result_trial_2.tsv", 
+    delim = "\t", escape_double = FALSE, 
+    trim_ws = TRUE))%>% rename(num_threads = `#th`)
+
+```
+
+```{r echo=FALSE}
+sq <-  result_sq %>% 
+  select(-c(trial, num_threads)) %>% 
+  pivot_longer(cols = everything(), names_to = 'problem_size', values_to = 'duration') %>% 
+  group_by(problem_size) %>% 
+  summarise(duration = median(duration)) %>% 
+  mutate(version = 'sequential')%>% 
+  mutate(problem_size = as.numeric(problem_size)^2) %>%
+  ungroup()
+
+gpu <-  result_gpu %>% 
+  select(-c(trial, num_threads)) %>% 
+  pivot_longer(cols = everything(), names_to = 'problem_size', values_to = 'duration') %>% 
+  group_by(problem_size) %>% 
+  summarise(duration = median(duration)) %>% 
+  mutate(version = 'gpu')%>% 
+  mutate(problem_size = as.numeric(problem_size)^2) %>%
+  ungroup()
+```
+
+```{r echo=FALSE}
+omp = result_omp %>% 
+  select(-c(`trial`)) %>% 
+  pivot_longer(cols = -c(num_threads), names_to = 'problem_size', values_to = 'duration') %>% 
+  group_by( num_threads, problem_size) %>%
+  summarise(duration = median(duration)) %>% 
+  mutate(version = 'omp')  %>% 
+  mutate(num_threads = as.factor(num_threads)) %>% 
+  mutate(problem_size = as.numeric(problem_size)^2) %>% 
+  ungroup()
+mc = result_mc %>% 
+  select(-c(`trial`)) %>% 
+  pivot_longer(cols = -c(num_threads), names_to = 'problem_size', values_to = 'duration') %>% 
+  group_by( num_threads, problem_size) %>%
+  summarise(duration = median(duration)) %>% 
+  mutate(version = 'mc')  %>% 
+  mutate(num_threads = as.factor(num_threads)) %>% 
+  mutate(problem_size = as.numeric(problem_size)^2) %>%
+  ungroup()
+```
+
+```{r echo=FALSE, fig.height=4}
+omp_plot = omp %>% 
+  ggplot(aes(x = problem_size, y = duration, color = num_threads)) +
+  geom_point() + 
+  geom_line()+
+  scale_x_continuous(breaks = c( 1048576 , 2096704,  4194304 , 8386816 ,16777216 ,33558849 ,67108864))+
+  labs(title="Fig 1: Open MP Performance", 
+       x = "Problem Size", 
+       y = 'Duration (sec)', 
+       color='Number of Threads') + 
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=9,angle = 90, vjust = 0.5) ,
+        text=element_text(size=12,  family="serif")) 
+
+mc_plot = mc %>% 
+  ggplot(aes(x = problem_size, y = duration, color = num_threads)) +
+  geom_point() + 
+  geom_line()+
+  scale_x_continuous(breaks = c( 1048576 , 2096704,  4194304 , 8386816 ,16777216 ,33558849 ,67108864))+
+  labs(title="Fig 2: MultiCore Performance", 
+       x = "Problem Size", 
+       y = 'Duration (sec)', 
+       color='Number of Threads') + 
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=8,angle = 90, vjust = 0.5),
+        text=element_text(size=12,  family="serif") ) 
+
+omp_plot
+mc_plot
+```
+
+According to the graph above, both OMP and MultiCore versions perform best at the maximum number of 16 threads yielding the lowest median duration across problem sizes.
+
+Therefore, I will be using the median duration at 16 threads for both OMP and MultiCore for the final comparison with other code versions.
+
+## Comparison
+
+Combining all the duration from multiple versions of code, I plot a bar chart to compare the duration taken by each version for various problem sizes. The result is shown in Figure 3.
+```{r include=FALSE}
+omp_16 = omp %>% 
+  filter(num_threads == 16) %>% 
+  select(-num_threads)
+mc_16 = mc %>% 
+  filter(num_threads == 16) %>% 
+  select(-num_threads)
+data = rbind(omp_16, sq, gpu, mc_16) %>% 
+  mutate(version =  fct_relevel(as.factor(version), c('sequential', 'omp', 'mc', 'gpu')))
+```
+
+```{r echo=FALSE}
+data %>% 
+  ggplot(aes(x = as.factor(problem_size), y = duration, fill = as.factor(version))) + 
+  # scale_y_log10()+
+  geom_col(position = "dodge") + 
+  labs(title="Fig 3: Conway's GoL: Code Version Comparision", 
+       subtitle = 'by Vichearith Meas',
+       x = "Problem Size", 
+       y = 'Median Duration (sec)', 
+       fill='Code Version') + 
+  scale_fill_manual(
+    values = c('purple', 'red', 'brown', 'blue'),
+    labels = c('sequential' = 'Sequential', 'omp'='Open MP', 'mc'='MultiCore', 'gpu'='GPU'))+
+  scale_y_continuous(breaks = seq(0,600, 50))+
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=10,vjust = 0.5),
+        text=element_text(size=10,  family="serif") ) 
+```
+
+```{r echo=FALSE}
+data %>%  
+  ggplot(aes(y = duration, x = problem_size, color = version)) + 
+    scale_y_continuous(breaks = seq(0,600, 50))+
+  geom_point()+
+  geom_path()+ 
+   scale_color_manual(
+    values = c('purple', 'red', 'brown', 'blue'),
+    labels = c('sequential' = 'Sequential', 'omp'='Open MP', 'mc'='MultiCore', 'gpu'='GPU'))+
+ scale_x_continuous(breaks = c( 1048576 , 2096704,  4194304 , 8386816 ,16777216 ,33558849 ,67108864))+
+   labs(title="Fig 4:Conway's GoL: Code Version Comparision", 
+       subtitle = 'by Vichearith Meas',
+       x = "Problem Size", 
+       y = 'Median Duration (sec)', 
+       fill='Code Version') +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=10,vjust = 0.5, angle=90),
+        text=element_text(size=10,  family="serif") ) 
+```
+
+### General Trend
+
+It is obvious that the sequential version takes the longest time among all versions across problem sizes. The median duration for this sequential version increases linearly as shown in figure 4. The gap between the sequential version and other paralleled versions only grows bigger as the problem size increases. Therefore, regardless of which parallel version is used it will be faster than the sequential version.
+
+All other paralleled codes perform within the same magnitude of duration with the maximum duration of around 75 seconds. The best version that takes the least time consistently across problem sizes is the **MultiCore** version.
+
+The OMP and GPU version performs similarly.
+
+### Compiler
+However, it is worth noticing that this sequential version is compiled using `gcc` compiler. When I switch to compile the same code using `pgcc` compiler, a task that takes 12 seconds only tasks 3 seconds to complete. This means that the `pgcc` compiler has serious optimization that impacts the performance of the code.
+**Compiler used:**
+
+|  Version   | Compiler |
+|:----------:|:--------:|
+| Sequential |   GCC    |
+|  Open MP   |   GCC    |
+| MultiCore  |   PGCC   |
+|    GPU     |   PGCC   |
+
+It is possible that the optimization of the compiler is a factor that leads to the slower speed of **OMP** compared to the **MultiCore.** 
+
+### What Happen to GPU Performance
+The most disappointing part of the experiment is the slow performance of the GPU. The result in figure 3 shows that the GPU version is only the second to the optimized MultiCore version. This is possible due to multiple reasons. 
+
+The CPU in the mscs server is known to be new, and far more superior than the old GPU card on the same machine. Despite with way fewer cores, this CPU can clock at a significantly higher rate which allows it to  outperform the GPU with many yet slower cores.
+
+Another possible explanation is the lightweight computation being done in each loops cycle by each GPU core. Unlike the hot plate simulation problem, this specific Game of Life problem has two functions, `apply_rules()` and `update_grid()` that are parallelized. These two functions contain only a few instructions for checking conditions and writing to the grid, both of which are considerably quick operations. This means that the overhead cost to enable the GPU parallelization might not be worth the speedup. 
+
+The GPU shines when the problem is bigger and requires more intensive computation per loop.
+
+# Conclusion
+
+There are multiple factors that need to be considered when trying to speed up. The first step is to identify the bottleneck of the problem (which loop) so that the correct chunks of code can be parallelized for maximum speedup and minimal modification. Another factor to consider is checking possible optimization options such as choosing the optimal language, and the optimal compiler that renders the code that run the fastest. The third part is knowing the hardware performance and its nature. This will help us utilize each hardware at its full potential. The last part is to understand the nature of the problem. For problems such as this one, it might be overkill to use GPU since the operation per iteration is very little. 

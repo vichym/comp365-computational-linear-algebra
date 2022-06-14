@@ -1,0 +1,124 @@
+---
+title: "| Computational Linear Algebra    \n| Activity 24: Dimension Reduction with the SVD \n"
+author: "INSERT STUDENT NAME HERE "
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: no
+    toc_float: yes
+    toc_depth: 2
+    theme: cerulean
+---
+
+```{r,message=FALSE,echo=FALSE}
+source("https://www.macalester.edu/~dshuman1/365/365Functions.r")
+library(ggplot2)
+```
+
+
+\
+
+#### Exercise 1: Best Rank $k$ Approximation
+
+(a) Write a function `SVDApprox` that takes a matrix $A$ and a rank $k$ and returns $A_k$, the best rank-$k$ approximation to $A$. Set the default value of $k$ to be $\frac{1}{2}\min\{m,n\}$.
+
+(b) Here is a 2x2 matrix $A$ and its unit circle mapping:
+```{r}
+A <- cbind(c(1, 0), c(2, 2))
+UnitCircleMap(A, p = 2)
+```
+
+Use your `SVDApprox` function to find $A_1$, the best rank-1 approximation of the matrix $A$. Use `UnitCircleMap` to draw the image of the unit circle in $\mathbb{R}^2$ under $A_1$.
+
+(c) Give a geometric interpretation for what $A_1$ is doing. What does $A-A_1$ do?
+
+
+\
+
+#### Exercise 2: Image Compression
+
+```{r,message=FALSE}
+library(jpeg)
+```
+
+Let's load the cameraman image
+```{r}
+where <- "https://www.macalester.edu/~dshuman1/data/cameraman_small.jpg"
+img <- readJPEG(readBin(where,"raw",1e6))
+dim(img)
+```
+
+The matrix `img` is a 256 x 256 matrix with each entry representing the grayscale value of a single pixel. So to store the image, we need to store 65,536 floating point numbers. We can plot it with the following function: 
+```{r fig.width=6, fig.height=6}
+imPlot <- function(img,...) {
+  plot(1:2, type='n',xlab=" ",ylab= " ",...)
+  rasterImage(img, 1.0, 1.0, 2.0, 2.0)
+}
+
+imPlot(img,main="Cameraman Image")
+```
+
+Our objective in this section is to compress this image using SVD.
+
+(a) Write a function `approxImg` that uses your `SVDApprox` function to do the following:
+
+- Takes an image and a rank $k$ as the two inputs
+
+- Computes the best rank $k$ approximation to the image
+
+- Thresholds the approximation by setting all values below zero back to zero and all values above one back to one
+
+- Plots the approximate image
+
+(b) Test your `approxImg` function on the Mars image with $k=5,10,25,50,100$.
+
+(c) For each approximation level $k$, how many floating point numbers do you need to store? For each $k$, compute the compression ratio, which is the number of floating point numbers needed to store the approximate image divided by the number of floating point numbers needed to store the original image (65,536).
+
+(d) Recall that the optimal approximation error by a rank $k$ matrix (with the error measured by the Frobenius norm) is  $||E_k||_F=||A-A_k||_F=\sum_{i={k+1}}^r \sigma_i^2$. We can use this to define the *relative error* as 
+$$
+\left( \frac{\sum_{i={k+1}}^r \sigma_i^2}{\sum_{i={1}}^r \sigma_i^2} \right)^{\frac{1}{2}}.
+$$
+
+Note that a higher proportion of energy in the first $k$ singular values leads to a lower relative error. Therefore, matrices $A$ that have a faster decay in the singular values will be easier to approximate by lower rank matrices.
+
+Plot the singular values of the Cameraman image.
+
+(e) One method to decide on the approximation rank is to choose $k$ such that the relative error is below a given threshold (say 31.6%, which corresponds to having 90% of the energy of all $r$ singular values in the first $k$ singular values). For the Cameraman image, let's choose the threshold to be 99.5% of energy, so find $k_*$ such that $\sum_{i={1}}^{k_*} \sigma_i^2 \geq 0.995*\sum_{i={1}}^r \sigma_i^2$, and plot the best approximation of the image with rank $k_*$.
+
+
+
+\
+
+#### Exercise 3: Dimension Reduction for Clustering
+
+The SVD can be used to take a two-dimensional or three-dimensional snapshot of high-dimensional data, so that dimensionally-challenged human beings can see it. In this problem you will use the top two singular values to project some data down to 2-dimensional space where you can see it.
+
+Here is a data set on cereals:
+```{r,echo=FALSE,message=FALSE}
+require(foreign)
+```
+
+```{r}
+cereal<-read.csv("https://www.macalester.edu/~dshuman1/data/365/cereal.csv")
+A <-  as.matrix(cereal[,3:10])
+print(A)
+```
+
+To perform this projection, we work with the covariance matrix $C$ of $A$. Compute this as follows:
+
+- For each column of $A$ subtract off the mean of that column. Then each entry is the difference from the mean of that feature
+
+- Now compute the matrix $C = A A^T$.  This is the covariance matrix. It measures how well each of the subjects are correlated. The ij-entry is the dot product of cereal i's data with cereal j's data, so it is (roughly) the cosine of the angle between them 
+
+a) Plot the singular values of the matrix $C$. You should see that there are 2 singular values that stand out from the rest.
+
+b) Use the vectors $x = v_1$ and $y = v_2$ from the SVD as the $x$ and $y$ coordinates of points in the plane. Plot these points.  Label the $i^{th}$ point with the $i^{th}$ brand of cereal. To do this, you can use the following command after your plotting command:
+
+```
+text(x1, y1, label = cereal$brand)
+```
+
+c) This method should group like cereals next to one another in the plane. Discuss whether you think this is happening.
+
+Note: You could also have used the SVD of $A^{\top}$ instead of the SVD of $C$. Why is this?

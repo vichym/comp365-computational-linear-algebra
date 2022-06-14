@@ -1,0 +1,1030 @@
+---
+title: "Parallelizing Boids Flocking Simulation"
+author: "Vichearith Meas and Sivhuo Prak"
+date: "4/30/2022"
+output:
+  pdf_document: 
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    highlight: tango
+    fig_caption: yes
+    keep_tex: yes
+header-includes: \usepackage{float}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, tidy.opts = list(width.cutoff = 60), tidy = TRUE,fig.pos = 'H')
+
+library(tidyverse)
+library(ggplot2)
+library(janitor)
+library(scales)
+library(readr)
+```
+
+# Introduction
+
+## Flocking Simulation
+
+The boid modeling simulates a group's behaviors, from animal flocking to particle movement. In the modeling process, each boid act depending on their perceptions of the environment and follow simple rules that govern their interaction with the environment, including boids' direction and velocity.
+
+The fundamental yet straightforward rules imposed on individual boids can lead to complex group behaviors seen in nature. Changes in rules and hyperparameters will affect the individual boid's reaction to the environment, resulting in a corresponding change in the flock's collective behavior.
+
+## Project Codebase
+
+This project is a work on existing [$\color{blue}{\text{source code}}$](https://github.com/gwf/CBofN) of simulating boids written in C language from a book called [$\color{blue}{\text{"The Computational Beauty of Nature"}}$](https://mitpress.mit.edu/books/computational-beauty-nature).
+
+The four simple rules taken directly from the source code used to regulate individual boids are described as follows:
+
+-   **Centering** : move towards the center of any boids in the viewing area.
+-   **Copying** : attempt to move in the average direction of that all boids that can be seen are moving in.
+-   **Avoidance** : move away from any close flyers.
+-   **Visual** : move in such a way that the bonehead obstructing your[boids] view no longer interferes.
+
+## Project Goal
+
+Simulating the flocking behavior of birds, fishes, or insects requires knowledge sharing between the environment in every time step of the simulation. While there are multiple methods to optimize knowledge sharing, there is still significant work on searching and computing that puts simulation algorithms at polynomial time complexity. For instant, the boid simulation used in this project implements a brute force searching approach to get information about other surrounding boids. Unfortunately, this approach makes this algorithm have a time complexity of $O(n^2)$, limiting the number of boids a system can simulate within a reasonable time.
+
+The goal of this project is to implement parallelism to the existing sequential code using (1)OpenMP, (2) OpenACC MultiCores, and (3) OpenACC GPU and compare their performance.
+
+# Parallelism
+## Libraries and Approaches
+
+### OpenMP
+
+OpenMP (omp) is an Application Programming Interface (API) that enables multithreaded parallelism using compiler directives. This library can be used with a program written in C, C++, and FORTRAN.
+
+OpenMP is preferred for its simplicity, incremental parallelization, flexibility, and portability. However, OpenMP code is limited to one device due to its shared-memory computing nature.
+
+### OpenACC
+
+Like OpenMP, OpenACC is an API that provides a collection of compiler directives and runtime routines that enable parallelism by allowing programmers to specify loops and regions of code to be executed in parallel on all the cores of a host CPU or an accelerator such as a GPU.
+
+OpenACC is as simple as OpenMP and allows one to take advantage of accelerators.
+
+## Sequential Profiling
+
+Implementing parallelism to the existing code is an iterative process. The first step is to locate bottleneck sections of the code, the sections that take the longest time to complete. These sections are places that most likely need parallelization. In order to do so, we use code profiling to acquire such insight.
+
+### Code Decoupling For Profiling
+
+However, how the profiler in the `GCC` compiler record the percentage of the total running time by function names, we decouple a section of code from the vast `main()` function that potentially takes much time into its function called `update_pv()`. We will further discuss the highly coupled nature of the original code in detail in a later section, and 
+
+### Profiling Result
+
+Please refer to code the appendix for code to generate sequential profiling.
+
+Each sample counts as 0.01 seconds.
+
+| %time | cumulative seconds | self seconds | calls  | self ms/call | total ms/call | name                |
+|------:|:------------------:|:------------:|:------:|:------------:|:-------------:|:--------------------|
+| 99.78 |        3.83        |     3.83     | 50000  |    76.63     |     76.83     | compute_new_heading |
+|  0.26 |        3.84        |     0.01     | 138007 |     0.07     |     0.07      | norm                |
+|  0.00 |        3.84        |     0.00     | 50000  |     0.00     |     0.00      | update_pv           |
+|  0.00 |        3.84        |     0.00     |  500   |     0.00     |     0.07      | draw_boid           |
+Table: Profiling Result
+
+The `compute_new_heading` function takes 99.78% of the total time. Therefore, we will be focusing on parallelism this function only.
+
+## Code Updates
+
+
+### Refactoring Global Variables
+
+As noted by the author in the source code itself, the original code is highly coupled with the use of global variables.
+
+>     " As noted below, this program makes heavy use of some global\
+>     variables."
+>
+>     "These are global to avoid passing them around all the time."
+
+While such code structure works in the sequential version, it presents extra challenges to parallelizing the code, especially when dealing with data sharing across physical devices. For example, programmers need to track which variables are used, updated, or needed at various locations.
+
+We decouple the program by creating more private functions, localizing variables in functions, and using parameters passing to simplify the process. This refactoring allows more visibility regarding data flow and will make implementing directives for parallelism easier.
+
+We will use this refactored code as the base for developing all other paralleled code versions. The original code is preserved and saved as `boids_original.c` in the repository.
+
+Figure \ref{fig:refactor_diff} in the appendix shows the difference in the file structure of the code before and after decoupling.
+
+### Limited Functions in Parallelism
+
+Specifically, when offloading the work to an accelerator device like GPU to execute in parallel, the device needs to have all the information about variables and function definitions used in the code section to execute the work. There cannot be any dependency on external libraries in the parallel code sections.
+
+Therefore, we need to disable one of the program's features that allows some unexpected boids' behavior since the code that allows this feature depends on the `random()` function from the standard library that only exists on the host memory. For this reason, this feature is taken out for all versions to keep consistency for testing.
+
+```{C, eval=FALSE, echo=TRUE}
+/*----------- boids_gpu.c -------------------*/
+
+void compute_new_heading(...)
+  #pragma acc kernels
+  #pragma acc loop independent
+  for (int which = 0; which < num; which++)
+  {
+    
+    ...
+  
+    /*----- COMMENT OUT: Feature not available ----*/
+    
+    /* Optionally add some noise. */
+    //if(wrand > 0) {
+    //  xt += random_range(-1, 1) * wrand;
+    //  yt += random_range(-1, 1) * wrand;
+    //}
+
+    /*--------------------------------------------*/
+    ...
+  }
+}
+
+```
+
+### Makefiles For Parallel Versions
+
+We update the Makefile commands to make three other versions of the `boids.seq.c` code. The updates are in the Makefile in the `bin` folder.
+
+Major updates to the Makefile include:
+
+-   `pgcc` compiler to compile MultiCores and GPU version
+-   command for generating `boids_prof` for profiling the sequential code
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_prof
+    ```
+
+-   command for compiling sequential version using `GCC` compiler
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_seq_gcc
+    ```
+
+-   command for compiling sequential version `PGCC` compiler
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_seq_pgcc
+    ```
+
+-   command for compiling OpenMP version using `GCC` compiler
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_omp_gcc
+    ```
+
+-   command for compiling OpenMP version using `PGCC` compiler
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_omp_pgcc
+    ```
+
+-   command for compiling Open ACC MultiCores version
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_mc
+    ```
+
+-   command for compiling Open ACC GPU version
+    ```{r, eval=FALSE, echo=TRUE}
+    make boids_gpu
+    ```
+
+-   command for cleaning all compiled code
+    ```{r, eval=FALSE, echo=TRUE}
+    #  remove all compiled code
+    make clean
+    #  remove omp
+    make clean_omp
+    #  remove gpu
+    make clean_gpu
+    #  remove sequential
+    make clean_seq
+    #  remove mul
+    make clean_mc
+    ```
+
+For the complete version of the Makefile, please refer to the appendix or the repository.
+
+### Parallelising Seqential Code
+
+The benefit of using directives is the simple modification needed to turn a sequential version into a parallel version.
+
+#### Multithreading with OpenMP
+ 
+OpenMP requires programmers to explicitly declares all private and shared variables. Therefore, it is good to use `default(none)` to ensure that all variables are declared correctly and not assumed to be shared by default. 
+
+This declaration should remind us of the importance of code refactoring before implementing parallelism.  
+
+```{c, eval=FALSE, echo = TRUE, comment = "//"}
+/*------------ boids_omp.c ----------------*/
+
+void compute_new_heading(...){
+  int which = 0;
+  
+  // UPDATE : add openmp pragma
+  #pragma omp parallel for default(none) private(which)\
+  shared(width, height, num, len, mag, angle, vangle,minv,\
+         ddt, dt, rcopy, rcent, rviso, rvoid, wcopy, wcent,\
+         wviso, wvoid, wrand, xp, yp, xv, yv, xnv, ynv)
+  for (which = 0; which < num; which++){
+    
+    ...
+    
+  }
+}
+
+```
+
+Parallel patterns appeared in the code: 
+
+- Thread Pool 
+- Parallel For Loop
+- Fork-Join (After Calculation in Parallel, back to host to paint boids)
+- Single Program Multiple Data
+- Shared Data (Information about other Boids from previous time step)
+- Data Composition
+- Barrier
+
+#### Mitlicore with OpenACC Multicore
+ 
+OpenACC is smart enough to recognize shared variables. Only private variables must be declared inside the `private()` statement. Fortunately, removing global variables and placing them within the correct function's scope eliminates the need for such declaration since private variables are already in the right places and bound within the correct scope.  
+ 
+```{c, eval=FALSE, echo = TRUE, comment = "//"}
+/*------------ boids_mc.c ----------------*/
+
+void compute_new_heading(...){
+  int which = 0;
+  
+  // UPDATE : add openacc pragma
+  #pragma acc parallel loop
+  for (which = 0; which < num; which++){
+    
+    ...
+    
+  }
+}
+
+```
+
+Parallel patterns appeared in the code: 
+
+- Parallel For Loop (parallel the looping each boid)
+- Fork-Join
+- Multiple Program Multiple Data (task are split up and run simultanously on multiple processors)
+- Shared Data
+- Data Composition (breaking big calculation into smaller pieces)
+- Barrier     
+
+#### Parallelism with OpenACC GPU
+
+The `independent` keyword used here explicitly tells the compiler that it is safe to write to the designated index of the arrays ($xa, ya, xb, yb, xc, yc, xd, yd$) since all cells can be modified independently without overwriting. 
+
+```{c, eval=FALSE, echo = TRUE}
+/*------------ boids_gpu.c ----------------*/
+
+void compute_new_heading(...){
+
+  // UPDATE : add openacc kernels pragma
+  #pragma acc kernels
+  #pragma acc loop independent
+  for (in which = 0; which < num; which++){
+    
+    ...
+    
+  }
+}
+
+```
+
+Parallel patterns appeared in the code: 
+
+- Parallel For Loop
+- Fork-Join (data send back to host for painting)
+- Single Program Multiple Data
+- Shared Data (utilize share information between time step)
+- Data Composition
+- Barrier   (Implicit barrier after for loop )
+
+
+### Accuracy Check 
+
+We utilize two indicators to check the accuracy of the parallel versions to make sure that data is calucated accurately compared to original sequential version.
+
+#### Visual Clue
+
+Figure  \ref{fig:figs}  shows the final position of all boids in the frame after simulation. All four versions seem to produce a similar final result for the same input. These similar last frames are a positive sign that suggests all versions produce accurate simulation results.  
+
+
+```{r figs,fig.cap="Final Frame after Running the Same Simulation", echo=FALSE,out.width="89%",out.height="50%", fig.show='hold',fig.align='center'}
+library(ggplot2)
+library(cowplot)
+library(magick)
+library(gridExtra)
+
+seq  = ggplot() + draw_image("seq.png")  + labs(title = "Sequential")+ theme_void()
+omp  = ggplot() + draw_image("omp.png") +labs(title = "OpenMP")+ theme_void()
+mc  = ggplot() + draw_image("mc.png") + labs(title = "MultiCores")+ theme_void()
+gpu  = ggplot() + draw_image("gpu.png") + labs(title = "GPU") + theme_void()
+
+grid.arrange(seq, omp, mc , gpu, ncol=2, nrow = 2)
+```
+
+#### A Boids Position
+
+A more objective way to observe the consistency of simulation results is to observe a random boid's position before and after each simulation. With a given set of parameters (`seed`, `the number of boids` , and `the number of iterations`), the resulting position of a boid before and after simulation should theoretically be the same regardless of code versions used. The table below summarizes the positions of a boid before and after simulation in various code versions. The raw data is in the appendix.  
+
+
+| Version | Boid Location Before | Boid location After |
+|:--------|:---------------:|--------------:|
+||  **300 boids 200 iterations** |||
+|Sequential |(103.000000, 166.000000)|(355.315916, 275.778268)|
+|OpenMP | (103.000000, 166.000000) | (355.315916, 275.778268)|
+|MultiCores |  (103.000000, 166.000000)|(355.315916, 275.778268)|
+|GPU | (103.000000, 166.000000)|(355.316353, 275.778168) |
+|| **200 boids 300 iterations** |||
+| Sequential | (103.000000, 166.000000)| (130.605900, 424.105038)|
+| OpenMP | (103.000000, 166.000000)| (130.605900, 424.105038)|
+| MultiCores| (103.000000, 166.000000) |  (130.605900, 424.105038)|
+|GPU | (103.000000, 166.000000) | (139.044738, 418.464440)|
+|| **100 boids 1000 iterations** |||
+| Sequential | (103.000000, 166.000000)| (52.735166, 199.802861)|
+| OpenMP| (103.000000, 166.000000)| (52.735166, 199.802861)|
+| MultiCores| (103.000000, 166.000000)| (52.735166, 199.802861)|
+| GPU | (103.000000, 166.000000)| (69.277055, 468.178402)|
+Table: Accuracy Check using a Boid Position Before and After Simulation
+
+The table shows that the boid `id=0` location after the simulation is similar across code versions. However, as the number of iterations increases, the GPU produces significantly different result compared to the rest.  This difference is due to the rounding error across devices (host + accelerator). For a summary about the difference between GPU and CPU floating system, pleas refer to this [$\color{blue}{\text{article}}$](http://www.cudahandbook.com/2013/08/floating-point-cpu-and-gpu-differences).
+
+
+
+## Data Collection
+We write Bash scripts to automate test executions. These tests cover compiler performance comparison, weak scalability test for OpenMP and MultiCores, and the performance test of all parallel versions. 
+
+### Choosing Test Parameter
+
+There are three parameters to choose from to design the test for this experiment: 
+
+- **Problem Size**: Number of boids the program simulates 
+- **Number of Thread/Core**: this is for OpenMP and MultiCores to set the number of threads/cores the program uses to run the simulation
+- **Number of Iterations**: How many time steps a simulation should run before terminating and calculating the total runtime. For simplicity, we keep the iteration for all tests at 500. 
+
+To prevent long-running time, we test several problem sizes on `boids_seq.c` running for 500 iterations to find the upper bound problem size for this version that the longest it takes is under 3000 seconds. For a problem size more extensive than this upper bound problem size, the `boids_seq.c` will skip. In doing so,  we can keep increasing the problem size for other versions while avoiding waiting for too long. 
+
+We repeat the same process to determine the upper bound for other version as well. 
+
+
+### Test Scripts
+
+All the test scripts for this project are listed here: 
+
+  - **all_version_performance_test.sh**
+  
+    This test examines the performance of each version of code on various problem sizes. 
+    
+    ```{r, eval=FALSE, echo = TRUE}
+    bash all_version_performance_test.sh 
+    ```
+    
+    
+  - **opm_mc_thread_test.sh**
+  
+    This test measures the weak scalability of the OpenMP and MultiCore with the number of threads and problem size increasing simultaneously.
+    
+    ```{r, eval=FALSE, echo = TRUE}
+    bash opm_mc_thread_test.sh [number of tests] [initial problem size] [number of scaling]
+    ```
+    
+  - **pgcc_gcc_test_1.sh**
+  
+    This test examines the difference in performance when using different compilers. This test runs on the sequential version with various problem sizes and other parameter constants.
+    ```{r, eval=FALSE, echo = TRUE}
+    bash pgcc_gcc_test_1.sh [number of tests] [number of iterations]
+    ```
+    
+  - **pgcc_gcc_test_2.sh**
+  
+    This test examines the difference in performance when using different compilers.  This test runs on the OpenMP version with a various number of threads while holding problem size and other parameter constants.
+    ```{r, eval=FALSE, echo = TRUE}
+    bash pgcc_gcc_test_2.sh [number of tests] [number of iterations] [problem size]
+    ```
+  
+### Saving Data and Running in Background
+
+To save data, we simply add `>` followed by `[output filename].tsv` to the end of the script. For example: 
+
+```{r,  eval=FALSE, echo = TRUE}
+bash opm_mc_thread_test.sh  5 100 5 > compiler_test_result.tsv
+```
+
+To run a test the background, simply add `&` to the end of the Bash command. For example:
+
+```{r,  eval=FALSE, echo = TRUE}
+bash opm_mc_thread_test.sh  5 100 5 > compiler_test_result.tsv &
+```
+
+### Raw Data
+
+All the collected data are saved in `.tsv` files. Then, we import these files into the RStudio for visualization and analysis. Below are the first six rows of all raw data. 
+
+```{r, echo=FALSE}
+
+compiler_test_1_raw <- 
+  as.data.frame(
+    read_delim("../445s22/project-team2-boiiiiiiii/computational-beauty-of-nature-vichym-main/CBofN/bin/compiler_test_1.tsv",
+               escape_double = FALSE, 
+                trim_ws = TRUE)) %>%
+  rename(trial = '#trial', 
+         compiler = COMPILER)
+knitr::kable(head(compiler_test_1_raw), caption = "Compiler Test 1 Raw Data",  digits = 3)
+```
+
+```{r, echo=FALSE}
+
+compiler_test_2_raw <- as.data.frame(
+  read_delim("../445s22/project-team2-boiiiiiiii/computational-beauty-of-nature-vichym-main/CBofN/bin/compiler_test_2.tsv", 
+             escape_double = FALSE, 
+             trim_ws = TRUE)) %>% 
+  rename(trial = '#trial', 
+         compiler = COMPILER)
+knitr::kable(head(compiler_test_2_raw), caption = "Compiler Test 2 Raw Data",  digits = 4)
+```
+
+
+```{r }
+weaktest.raw <- as.data.frame(
+  read_delim("../445s22/project-team2-boiiiiiiii/computational-beauty-of-nature-vichym-main/CBofN/bin/omp_mc_weak_test.tsv", 
+               escape_double = FALSE, 
+                trim_ws = TRUE)) %>% 
+  rename(duration = time) %>% 
+  clean_names()
+knitr::kable(head(weaktest.raw), caption = "Weak Scalability Test Raw Data",  digits = 4)
+```
+
+```{r}
+alltest.raw<- as.data.frame(
+  read_delim("../445s22/project-team2-boiiiiiiii/computational-beauty-of-nature-vichym-main/CBofN/bin/all_version_performance_test_1.tsv", 
+             escape_double = FALSE, 
+             trim_ws = TRUE)) %>% 
+  rename(trial = '#trial')
+knitr::kable(head(weaktest.raw), caption = "Performance Tests of All Code Versions",  digits = 4)
+```
+
+# Analysis
+## Compiler Test
+
+There are two compiler options, `GCC` and `PGCC`, to compile sequential and OpenMP versions. The `PGCC` provides an additional level of code optimization that potentially boosts a program's performance compared to when compiled with traditional `GCC`. 
+
+```{r compiler1, fig.cap="Compiler test 1", fig.align='center', echo=FALSE,out.height="40%"}
+
+compiler_test_1_result = compiler_test_1_raw %>% 
+  pivot_longer(cols = -c(trial, compiler), 
+               values_to = "duration",
+               names_to = "problem_size") %>% 
+  mutate(problem_size = as.numeric(problem_size)) %>% 
+  group_by(compiler, problem_size) %>% 
+  summarize(duration = median(duration),
+            compiler = as.factor(compiler))
+
+
+compiler_test_1_result %>% 
+  ggplot(aes(x = problem_size,
+             y = duration,
+             color = compiler,
+             linetype = compiler)) + 
+  geom_line( size = 1) + 
+  scale_color_discrete(labels= c("GCC", "PGCC")) + 
+  scale_x_continuous(breaks= seq(0,1000, by=100)) + 
+  scale_y_continuous(breaks= seq(0, 30, by=5)) + 
+  scale_linetype_discrete(labels= c("GCC", "PGCC")) + 
+  labs(y = "Duration (sec)", 
+       x = "Problem Size", 
+       linetype= 'Compiler',
+       color= 'Compiler',
+       subtitle= 'By Vichearith Meas & Sivhuo Prak',
+       title= "Compiler Testing : Performance of Boid_seq.c")+
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=8,vjust = 0.5, family="serif"),
+        text=element_text(size=10,  family="serif") ) 
+
+```
+
+Figure \ref{fig:compiler1} reveals that the code compiled using `PGCC` out perform that compiled using `GCC` across problem size. The PGCC version is approximately 3x faster than the GCC version on this test. 
+
+```{r}
+compiler_test_2_result = compiler_test_2_raw %>% 
+  pivot_longer(cols = -c(trial, compiler),                
+               values_to = "duration",
+               names_to = "number_thread" ) %>% 
+  mutate(number_thread = as.numeric(number_thread)) %>% 
+  group_by(compiler, number_thread) %>% 
+  summarize(duration = median(duration),
+            compiler = as.factor(compiler))
+```
+
+
+```{r compiler2,fig.cap="Compiler test 2", fig.align='center', echo=FALSE,out.height="40%"}
+compiler_test_2_result %>% 
+  ggplot(aes(x = number_thread,
+             y = duration,
+             color = compiler,
+             linetype = compiler)) + 
+  geom_line( size = 1) + 
+  scale_color_discrete(labels= c("GCC", "PGCC")) + 
+  scale_linetype_discrete(labels= c("GCC", "PGCC")) + 
+  scale_x_continuous(breaks= c(2,4,8,16)) + 
+  scale_y_continuous(breaks= seq(0, 50, by=5)) + 
+  labs(y = "Duration (sec)", 
+       x = "Number of Thread", 
+       linetype= 'Compiler',
+       color= 'Compiler',
+       subtitle= 'By Vichearith Meas & Sivhuo Prak',
+       title= "Compiler Testing: Performance of Boid_omp.c Simulating 1000 Boids 200 iteration")+
+theme(legend.position = 'top',
+        axis.text.x = element_text(size=8,vjust = 0.5, family="serif"),
+        text=element_text(size=10,  family="serif") ) 
+```
+
+Figure \ref{fig:compiler2} further proves the superiority of PGCC optimization capability. Across various thread numbers, the PGCC OpenMP version outperforms the GCC version by almost 100%. Furthermore, the PGCC version is twice as fast as the GCC version in the multi-threading version. 
+
+Also, since the PGCC compiler is used to compile all other versions, we will be using the PGCC version of sequential and OpenMP for performance testing and weak scalability testing. 
+
+## Weak Scalability Test
+
+The weak Scalability Test determines what will happen to the timing as we double the problem size each time. We start with five different initial problem sizes in this test, with the smallest being 50. Such a small starting point allows scaling without hitting the upper bound. Then, we double every initial problem size five times and record the run time. 
+
+```{r weak1, fig.cap="Weak Scalability Test", fig.align='center', echo=FALSE,out.height="40%" }
+weaktest.result = weaktest.raw %>%  
+  mutate(init_size = case_when( 
+                              line  ==1  ~ 50, 
+                              line  ==2  ~ 100, 
+                              line  ==3  ~ 200, 
+                              line  ==4  ~ 400, 
+                              line  ==5  ~ 800),  
+         program = case_when( program  == "./boids_omp_pgcc" ~ "OpenMP",  
+                              program  == "./boids_mc" ~ "Multicore") )%>% 
+  group_by( init_size, program, problem_size, threads) %>% 
+  summarize(duration = median(duration))
+
+weaktest.result %>%  
+  ggplot(aes(x = threads, y = duration, color = as.factor(init_size))) + 
+  geom_path(se=F, size = 1) + 
+  geom_point(size = 1, color = "black") + 
+  scale_x_continuous(breaks=c(2,4,8,16))+
+  scale_y_continuous(n.breaks = 10)+
+  facet_grid(~program) +
+   labs(title="Weak Scalability: Multicore vs OpenMP", 
+       subtitle = 'By Vichearith Meas & Sivhuo Prak',
+       x = "Number of Thread", 
+       y = 'Median Duration (sec)', 
+       color='Initial Problem Size') +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=9, vjust = 0.5, family="serif"),
+        text=element_text(size=10,  family="serif") ) 
+
+  
+```
+
+The test result shows that as the problem size doubles along with the number of threads/cores, the run time increases linearly instead of staying constant. This increase is due to increased overhead costs such as communication costs between threads/cores and data transferring. 
+
+It is also noticeable that for both the OpenMP version and MultiCores version, the running at 16 threads/cores (the maximum on the testing computer) provides the fastest performance. Therefore, we will be using this number of threads/cores for both versions to compare with other code versions.
+
+## Parallelism Performance Test
+
+```{r}
+alltest.result=alltest.raw %>% 
+  mutate(program = case_when(
+                    program  == "./boids_gpu" ~ "GPU",  
+                    program  == "./boids_mc" ~ "Multicore",  
+                    program  == "./boids_omp_pgcc" ~ "OpenMP",
+                    program  == "./boids_seq_pgcc" ~ "Sequential")) %>% 
+  mutate(duration = as.numeric(duration),
+          program = fct_relevel(program, c('Sequential', 'OpenMP',"Multicore", "GPU"))) %>% 
+  group_by(program, problem_size) %>% 
+  summarize(duration = median(duration))
+
+xx = c(100,200,400,800,1600,3200,6400,12800,25600,51200)
+gpu.data = alltest.result %>% filter(program== 'GPU', !is.na(duration)) 
+gpu.spline = splinefun(gpu.data$problem_size, gpu.data$duration, method="fmm")(xx)
+
+omp.data = alltest.result %>% filter(program== 'OpenMP', !is.na(duration)) 
+omp.spline = splinefun(omp.data$problem_size,omp.data$duration,  method="fmm")(xx)
+
+seq.data = alltest.result %>% filter(program== 'Sequential', !is.na(duration)) 
+seq.spline = splinefun(seq.data$problem_size,seq.data$duration, method="fmm")(xx)
+
+mc.data = alltest.result %>% filter(program== 'Multicore', !is.na(duration)) 
+mc.spline = splinefun(mc.data$problem_size,mc.data$duration,method="fmm")(xx)
+
+prediction = data.frame(problem_size = xx,
+           omp = omp.spline,
+           mc = mc.spline,
+           seq = seq.spline,
+           gpu = gpu.spline) %>%  
+          pivot_longer(cols = -c(problem_size), 
+                       values_to = 'pred',  
+                       names_to = 'program') %>%
+          mutate(program = case_when(
+                    program  == "gpu" ~ "GPU",  
+                    program  == "mc" ~ "Multicore",  
+                    program  == "omp" ~ "OpenMP",  
+                    program  == "seq" ~ "Sequential")) %>% 
+          inner_join(alltest.result) %>% 
+          mutate(program = factor(program, levels = c("Sequential","OpenMP", "Multicore", "GPU")))
+  
+```
+
+### Time Complexity of the Simulation Algorithm
+
+Figure \ref{fig:alltest} shows the exponential growth in duration as the problem size increases. Such accelerated growth inherently exists for all the four versions, which suggests the possible causal link to the nature of the algorithm of this simulation itself.
+
+```{r alltest, fig.cap="Performance Test" , fig.align='center', echo=FALSE,out.height="40%"}
+alltest.result %>%  
+  ggplot(aes(y = duration, x = problem_size, color = program)) + 
+  scale_y_continuous()+
+  geom_point()+
+  stat_smooth( fullrange=TRUE) +
+  scale_color_manual(values = c("Sequential" = "dodgerblue2",
+                                "OpenMP"="green3",
+                                "Multicore"="orange3",
+                                "GPU"="orangered3"))+
+ scale_x_continuous(breaks = c(0,100,200,400,800,1600,3200,6400,12800,25600,51200))+
+   labs(title="Performance Test", 
+       subtitle = 'By Vichearith Meas & Sivhuo Prak',
+       x = "Problem Size", 
+       y = 'Median Duration (sec)', 
+       fill='Code Version') +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=6, vjust = 0.5, angle=90, family="serif"),
+        text=element_text(size=10,  family="serif") )
+
+```
+
+The first step is to investigate the time complexity of the algorithm. We find that the author that writes the code base utilizes a brute force search algorithm inside the `computer_new_heading()` function to get information about other boids and compute new heading vectors. This brute force approach makes the simulation algorithm an **$O(n^2)$** algorithm.
+
+```{r alltest2,fig.cap="Performance Test with Scale Y-axis", fig.align='center', echo=FALSE,out.height="40%"}
+alltest.result %>%  
+  mutate(duration = sqrt(duration)) %>% 
+  ggplot(aes(y = duration, x = problem_size, color = program)) + 
+  scale_y_continuous()+
+  geom_point()+
+  stat_smooth( fullrange=TRUE) +
+  scale_color_manual(values = c("Sequential" = "dodgerblue2",
+                                "OpenMP"="green3",
+                                "Multicore"="orange3",
+                                "GPU"="orangered3"))+
+ scale_x_continuous(breaks = c(0,100,200,400,800,1600,3200,6400,12800,25600,51200))+
+   labs(title="Performance Test", 
+       subtitle = 'By Vichearith Meas & Sivhuo Prak',
+       x = "Problem Size", 
+       y = 'Squart Root of Duration (sec)', 
+       fill='Code Version') +
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=6, vjust = 0.5, angle=90, family="serif"),
+        text=element_text(size=10,  family="serif") )
+```
+
+
+Figure \ref{fig:alltest2} shows the $\sqrt{duration}$ in the $y$ axis instead for the $duration$. This plot accounts for the **$O(n^2)$** nature of the algorithm. The updated graph show better reflects the differences in performance in the various version. According to this graph, there is a positive linear relationship between $\sqrt{druation}$ and the number of problem sizes. The sequential version has the highest slope, followed by the OpenMP, MultiCores, and the GPU version. The greater the slope, the faster the increase in duration (exponentially). 
+
+The GPU has the best scalability because the GPU version offers the best probability of executing a simulation with a huge number of boids and offers the least duration compared to other options examined in this project. The OpenMP version provides an improvement from the sequential version. However, this version offers the worst improvement compared to other parallel versions.
+
+
+```{r alltest3,fig.cap="Extrapolation on the Log Scale", fig.align='center', echo=FALSE,out.height="40%"}
+prediction %>%  
+  mutate(problem_size = as.factor(problem_size)) %>%
+  ggplot(aes(x = problem_size,
+             y = duration, 
+             fill = program)) + 
+  geom_col(position = "dodge", width = 0.5) + 
+  geom_hline(yintercept = 1, size = 0.2)+
+  geom_line(aes(x = problem_size,
+                y = pred,
+                group = program,
+                color = program), size = 0.5) +
+  scale_x_discrete(breaks = c(100,200,400,800,1600,3200,6400,12800,25600,51200))+
+   labs(title="Projection of Duration on Log Scale", 
+       subtitle = 'By Vichearith Meas & Sivhuo Prak',
+       x = "Problem Size", 
+       y = 'Median Duration (sec)', 
+       fill='Code Version',
+       color='Code Version') +
+  scale_fill_manual(values = c("Sequential" = "dodgerblue2",
+                                "OpenMP"="green3",
+                                "Multicore"="orange3",
+                                "GPU"="orangered3"))+
+  scale_color_manual(values = c("Sequential" = "dodgerblue2",
+                                "OpenMP"="green3",
+                                "Multicore"="orange3",
+                                "GPU"="orangered3"))+
+     scale_y_log10(breaks = trans_breaks("log10", function(x) 10^x),
+     labels = trans_format("log10", math_format(10^.x))) +
+  annotation_logticks(sides = "l")+ 
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=6,vjust = 0.5,  family="serif"),
+        text=element_text(size=10,  family="serif") ) 
+
+```
+
+Due to the exponential increase in duration beyond the upper bound set in section 2.4.1, we do not simulate specific code versions beyond certain problem sizes. However, We can extrapolate how long each version might take based on the trend and data collected. The log scale is used instead in this graph because of the significant difference in magnitudes between various versions. The log scale allows us to closely examine the range of enormous problem sizes while preserving the information at the lower range of the problem size. Figure \ref{fig:alltest3} show the performance of all the code versions on the log scale with extrapolation lines. 
+
+According to the extrapolation, the sequential version could have taken approximately $7 \times 10^3$ seconds ($\approx 2$ hours) to simulate 25600 boids for 500 iterations and $2 \times 10^4$ seconds ($\approx 5.55$ hours) to simulate 51200 boids for 500 iterations. Similarly, the OpenMP version could have taken $3 \times 10^3$ seconds ($\approx 50$ minutes) to simulate 25600 boids for 500 iterations. 
+
+The log scale also reveals the detail of simulating a small problem size. The communication cost for GPU is notable for the problem size between 100 to 1600 boids. Despite the better scalability in huge problem size territory, the GPU may not be ideal for small problem sizes due to its minimum communication cost. The GPU is consistently slower than other versions, even the sequential version. The winner for small problem size territory goes to the MultiCores version since it takes the least time across the problem sizes range between 100 and 800. After 3200 boids, the GPU outperforms the MultiCores version and the rest. 
+
+# Conclusion
+
+In applications that require many boids, it is simply impossible to run this simulation using a sequential version since the duration will grow exponentially. While parallelism is a solution, using the correct version of parallelism is what this paper attempts to investigate. We learn that the OpenMP provides intuitive directives pragma that is easy to implement incrementally. However, it does not provide good scalability compared to what the Open Acc can offer in the long run. The Open ACC library allows programmers similar intuitive directives to implement in their sequential version and the option to choose to implement parallelism using MuiltiCores or GPU. Depending on the problem size, programmers may choose to implement MultiCores for smaller problem sizes and the GPU for the more significant problem size when the overhead cost is minor compared to the overall run times. 
+
+While the various approach to parallelism is critical to improving scalability, improving the algorithm itself is paramount. The overall duration would be significantly reduced if the time complexity of the simulation algorithm reduces from $O(n^2)$. Rather than implementing a brute force search algorithm, one may implement other ways to optimize searching neighboring boids, such as spatial structure, sorting boids according to a single axis projection, or organizing boids into a uniform 3D grid.
+
+# Future Work
+
+We are interested in investigating more into the floating difference between the CPU and the GPU since this difference will significantly impact how one might choose one solution over another due to accuracy. 
+
+A few papers discuss Message Passing Interface (MPI) or CUDA to parallelism this boids simulation. Other alternative approaches would be an excellent future work to fully explore all available options to parallel this simulation. 
+
+We also would love to look into optimizing the boid search algorithm from $O(N^2)$. While choosing the parallelism approach to give the best improvement, we believe that we can still have space to improve the search algorithm, creating an even more significant impact on the overall improvement of the simulation in the sequential or parallel version.  
+
+
+
+# References
+
+Flake, Gary William. The Computational Beauty Of Nature. The MIT Press, 1998.
+
+Zhou, Bo & Zhou, Suiping. (2005). Parallel simulation of group behaviors. - 370. 10.1109/WSC.2004.1371337. Simulation Conference, 2004. Proceedings of the 2004 Winter, Volume: 1
+
+Tomas, Vojtěch. "I Flock, You Flock - Vojtatom.Cz". Vojtatom.Cz, 2022, <https://www.vojtatom.cz/flocking/>.
+
+# Appendix
+
+## Sequential Profiling
+
+```{r seq_profiling, echo=TRUE, eval=FALSE, fig.cap="Generating Sequential Profiling"}
+# 1. compile boid profiling version
+make boids_prof 
+# output : 
+#         gcc -pg  -c -o boids_prof.o ../src/boids_seq.c
+#         gcc -pg  -o boids_prof boids_prof.o -L. -L/usr/X11/lib -lmisc -lm -lX11 -fopenmp 
+
+# 2. run some test to collect data about code; 
+#     Running the code creates file called gmon.out. 
+./boids_prof -num 500 -steps 200
+
+# 3. generate a profile called boids_seq_profile.out
+ gprof ./boids_prof gmon.out > boids_seq_profile.out
+
+```
+
+## Code Refactoring
+
+```{r refactor_diff,echo=FALSE,out.width="89%",out.height="50%",fig.cap="File Structure Before and After Refactoring",fig.show='hold',fig.align='center'}
+knitr::include_graphics(c("boids_orignal.png","boids_refactored.png"))
+knitr::include_graphics(c("boids_orignal.png","boids_refactored.png"))
+
+```
+
+## Updated Makefiles
+
+```{Makefile, eval = FALSE, echo = TRUE}
+#######################################################################
+
+# Copyright (c) 1998 Gary William Flake -- Permission granted for any
+# use provied that the author's comments are neither modified nor
+# removed. No warranty is given or implied.
+
+# Makefile for example code -- Requires GNU make.
+
+# Undefine the line below only if you want the Linux SVGA graphics
+# driver builtin.  Note that you will have to make each program
+# set-UID root for this to work.
+
+#VGA      = 1
+X11      = 1
+XINCLUDE = /usr/X11/include
+XLIBS    = /usr/X11/lib
+#  -------------------- COMPILERS -------------------------
+CC   = gcc
+PGCC = pgcc
+
+#  -------------------- OpenMP : MULTITHREAD -------------------------
+OMP = -fopenmp 
+COPTS    = -O3  -Wall  -D__dest_os=unix -fopenmp    # LS added openmp here
+
+#  -------------------- OPEN ACC : MULTICORES -------------------------
+ MOPTS = -mp -ta=multicore -Minfo=opt  -w
+
+#  -------------------- OPEN ACC : GPU -------------------------
+# accelerator options for managed memory
+AOPTSM = -fast -ta=tesla:cc75,managed -Minfo=accel
+
+#  --------------------------------------------------------------------
+#######################################################################
+
+# Do not edit this section
+
+vpath %.c ../src
+
+ifdef VGA
+ifdef X11
+# VGA and X11
+PLOTOBJS  = vgaplot.o x11plot.o x11cplot.o pgmplot.o psplot.o rawplot.o
+PLOTFLAGS = -DPLOTX11 -DPLOTVGA
+LIBS      = -lmisc -lm -lX11 -lvga
+else
+# VGA and !X11
+PLOTOBJS  = vgaplot.o pgmplot.o psplot.o rawplot.o
+PLOTFLAGS = -DPLOTVGA
+LIBS      = -lmisc -lm -lvga
+endif
+else
+ifdef X11
+# !VGA and X11
+PLOTOBJS  = x11plot.o x11cplot.o pgmplot.o psplot.o rawplot.o
+PLOTFLAGS = -DPLOTX11
+LIBS      = -lmisc -lm -lX11
+else
+# !VGA and !X11
+PLOTOBJS  = pgmplot.o psplot.o rawplot.o
+PLOTFLAGS =
+LIBS      = -lmisc -lm
+endif
+endif
+
+CFLAGS   = $(COPTS) -I$(XINCLUDE) $(PLOTFLAGS)
+LDFLAGS  = -L. -L$(XLIBS)
+
+CC = gcc 
+
+# Profiler
+CC_PROF = gcc -pg 
+
+include ../Makefile.inc
+
+# PROGS    = $(DEMOS)
+PROGS = $(BOIDS)
+
+BOID_SEQ_GCC := $(addsuffix _seq_gcc,$(BOIDS))
+BOID_SEQ_PGCC := $(addsuffix _seq_pgcc,$(BOIDS))
+BOID_OMP_GCC := $(addsuffix _omp_gcc,$(BOIDS))
+BOID_OMP_PGCC := $(addsuffix _omp_pgcc,$(BOIDS))
+BOID_MC := $(addsuffix _mc,$(BOIDS))
+BOID_GPU := $(addsuffix _gpu,$(BOIDS))
+
+#######################################################################
+
+# default: $(PROG) 
+
+# $(PROGS): % : %.o libmisc.a
+# 	$(CC) -o $@ $< $(LDFLAGS) $(LIBS)
+
+default: $(BOID_SEQ_PGCC) $(BOID_MC) $(BOID_OMP_PGCC) $(BOID_GPU)
+
+#  remove all boids version
+clean: clean_seq clean_gpu clean_mc clean_omp
+
+# -------------------------  BOIDS SEQ------------------------------------
+# compile with GCC
+$(BOID_SEQ_GCC): % : ../src/boids_seq.c libmisc.a
+	$(CC)  ../src/boids_seq.c $(LDFLAGS) $(LIBS) $(OMP) -o $(BOID_SEQ_GCC)
+
+# compile with PGCC
+$(BOID_SEQ_PGCC): % : ../src/boids_seq.c libmisc.a
+	$(PGCC)  ../src/boids_seq.c $(LDFLAGS) $(LIBS) $(OMP) -o $(BOID_SEQ_PGCC)
+
+boids_seq : $(BOID_SEQ_PGCC)
+
+clean_seq:
+	rm -f $(BOID_SEQ_GCC) $(BOID_SEQ_PGCC) *.a *.o
+
+# -------------------------  BOIDS OMP------------------------------------
+# compile with GCC
+$(BOID_OMP_GCC): % : ../src/boids_omp.c libmisc.a
+	$(CC)  ../src/boids_omp.c $(LDFLAGS) $(LIBS) $(OMP) -o $(BOID_OMP_GCC)
+
+# compile with PGCC
+$(BOID_OMP_PGCC): ../src/boids_omp.c libmisc.a
+	$(PGCC)  ../src/boids_omp.c $(LDFLAGS) $(LIBS) $(OMP) -o $(BOID_OMP_PGCC)
+
+boids_omp: $(BOID_OMP_PGCC)
+
+clean_omp:
+	rm -f  $(BOID_OMP_GCC)  $(BOID_OMP_PGCC) *.a *.o
+
+# -------------------------  BOIDS MC------------------------------------
+$(BOID_MC):  ../src/boids_mc.c libmisc.a
+	$(PGCC) $(MOPTS) ../src/boids_mc.c $(LDFLAGS) $(LIBS) $(OMP) -o $(BOID_MC)
+clean_mc:
+	rm -f $(BOID_MC) *.a *.o
+
+# -------------------------  BOIDS GPU ------------------------------------
+$(BOID_GPU):  ../src/boids_gpu.c libmisc.a
+	$(PGCC) $(AOPTSM) ../src/boids_gpu.c $(LDFLAGS) $(LIBS) $(OMP) -o $(BOID_GPU)
+
+clean_gpu:
+	rm -f $(BOID_GPU) *.a *.o
+
+# ------------------------ BOIDS SEQ  Profiling ---------------------------
+
+boids_prof: % : boids_prof.o libmisc.a
+	$(CC_PROF) -o $@ $< $(LDFLAGS) $(LIBS) $(OMP)
+
+boids_prof.o: boids_seq.c 
+	$(CC_PROF) -c -o boids_prof.o ../src/boids_seq.c
+# --------------------------------------------------
+# ---------------------------------------------------------------------
+
+libmisc.a: misc.o plot.o $(PLOTOBJS) 
+	ar cr $@ $^
+	ranlib $@
+
+# bifur1d.o phase1d.o: maps1d.c
+
+#######################################################################
+
+```
+
+## Accuracy Check
+```{r, eval=FALSE, echo=TRUE}
+#  -------------- Test 1 ----------------------
+[sprak@mscs01 bin]$ ./boids_gpu -num 300 -steps 200 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (355.316353, 275.778168)
+
+[sprak@mscs01 bin]$ ./boids_mc -num 300 -steps 200 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (355.315916, 275.778268)
+
+[sprak@mscs01 bin]$ ./boids_omp_pgcc -num 300 -steps 200 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (355.315916, 275.778268)
+4.151178        
+
+[sprak@mscs01 bin]$ ./boids_seq_pgcc -num 300 -steps 200 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (355.315916, 275.778268)
+3.935080        
+
+#  -------------- Test 2 ----------------------
+[sprak@mscs01 bin]$ ./boids_gpu -num 200 -steps 300 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (139.044738, 418.464440)
+14.864762       
+
+[sprak@mscs01 bin]$ ./boids_mc -num 200 -steps 300 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (130.605900, 424.105038)
+6.127104        
+
+[sprak@mscs01 bin]$ ./boids_omp_pgcc -num 200 -steps 300 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (130.605900, 424.105038)
+9.032359        
+
+[sprak@mscs01 bin]$ ./boids_seq_pgcc -num 200 -steps 300 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (130.605900, 424.105038)
+6.008044      
+
+#  -------------- Test 3 ----------------------
+[sprak@mscs01 bin]$ ./boids_seq_pgcc -num 100 -steps 1000 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (52.735166, 199.802861)
+3.793922        
+
+[sprak@mscs01 bin]$ ./boids_omp_pgcc -num 100 -steps 1000 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (52.735166, 199.802861)
+3.877351        
+
+[sprak@mscs01 bin]$ ./boids_mc -num 100 -steps 1000 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (52.735166, 199.802861)
+
+[sprak@mscs01 bin]$ ./boids_gpu -num 100 -steps 1000 100 -steps 1000 
+>> Done. Click mouse on window to end program. <<
+Before Sim : (103.000000, 166.000000)->After Sim : (69.277055, 468.178402)
+
+```
+
+## Performance Test
+```{r}
+p1 = prediction %>%  
+  mutate(problem_size = as.factor(problem_size)) %>% 
+  ggplot(aes(x = problem_size,
+             y = duration, 
+             fill = program)) + 
+  geom_col(position = "dodge", width = 0.5) + 
+  scale_x_discrete(breaks = c(100,200,400,800,1600,3200,6400,12800,25600,51200))+
+   labs(title="Performance Test: Code Version Comparision", 
+       subtitle = 'By Vichearith Meas & Sivhuo Prak',
+       x = "Problem Size", 
+       y = 'Median Duration (sec)', 
+       fill='Code Version',
+       color='Code Version') +
+  scale_fill_manual(values = c("Sequential" = "dodgerblue2",
+                                "OpenMP"="green3",
+                                "Multicore"="orange3",
+                                "GPU"="orangered3"))+
+  scale_color_manual(values = c("Sequential" = "dodgerblue2",
+                                "OpenMP"="green3",
+                                "Multicore"="orange3",
+                                "GPU"="orangered3"))+
+  theme(legend.position = 'top',
+        axis.text.x = element_text(size=9,vjust = 0.5, family="serif"),
+        text=element_text(size=10,  family="serif") ) 
+
+p1
+```
+

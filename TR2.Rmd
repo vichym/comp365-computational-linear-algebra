@@ -1,0 +1,146 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+source("https://www.macalester.edu/~dshuman1/365/365Functions.r")
+```
+
+
+```{r}
+dat <- nhl2122
+teams.2 <- read.csv("~/Documents/MATH 365/TR2/teams-2.csv", header=FALSE)
+teams <- c()
+teams <- 1:length(unique(dat$Visitor))
+names(teams) <- teams.2$V1
+dat <- dat %>% mutate(S_ij = G/(G+G.1)) %>% mutate(S_ji = G.1/(G+G.1))
+teams
+```
+
+```{r}
+mat <-  matrix(nrow=length(teams), ncol = length(teams))
+
+for (i in names(teams)){
+  for(j in names(teams)){
+    new <- dat %>% filter(Visitor == i & Home == j)
+    new2 <- dat %>% filter(Visitor==j & Home==i)
+    mat[teams[[i]],teams[[j]]] <- (sum(new$S_ij)+sum(new2$S_ji))/(sum(new$S_ij)+sum(new$S_ji)+sum(new2$S_ij)+sum(new2$S_ji))
+    mat[teams[[j]],teams[[i]]] <- (sum(new$S_ji)++sum(new2$S_ij))/(sum(new$S_ij)+sum(new$S_ji)+sum(new2$S_ij)+sum(new2$S_ji))
+  }
+  print(i)
+}
+mat[is.na(mat)] <- 1
+```
+
+```{r}
+mat2 <- mat-diag(1,32,32)
+
+E <- eigen(mat)
+lambda <- E$values[1]
+v <- E$vectors[,1]
+vnorm(v,p="I")
+v <- as.numeric(v)
+names(v) <- names(teams)
+which(v == min(v))
+
+E2 <- eigen(mat2)
+lambda2 <- E2$values[1]
+v2 <- E2$vectors[,1]
+v2 <- as.numeric(v2)
+names(v2) <- names(teams)
+which(v2 == max(v2))
+eigen_ranking <- cbind(names(sort(v,decreasing = TRUE)),sort(v,decreasing = TRUE))
+eigen_ranking <- data.frame(eigen_ranking)
+colnames(eigen_ranking) <- c("Team","Value")
+
+save(mat,file="eigen_mat.RData")
+save(eigen_ranking, file="eigen_ranking.RData")
+```
+
+```{r}
+dat <- dat %>% mutate(win = ifelse(G>G.1, Visitor,Home)) %>% mutate(lose = ifelse(G>G.1,Home,Visitor)) # mutate win and lose columns from G and G.1 values
+
+
+# apply(names(teams), function(v) sum(dat$win==x[v])) look into this :)
+
+# win_dat <- count(dat,win)
+# win <- win_dat$n
+# names(win) <- win_dat$win
+# win
+
+# lose_dat <- count(dat,lose)
+# lose <- lose_dat$n
+# names(lose) <- lose_dat$lose
+# lose
+
+# b <- 1+ (1/2*(win-lose))
+# names(b) <- names(win)
+# win
+# lose
+# b
+# win
+win <- sapply(names(teams), function(x) sum(dat$win==x)) # count number of times each team wins
+lose <- sapply(names(teams), function(x) sum(dat$lose==x)) # count number of times each team loses
+b <- 1+ (1/2*(win-lose)) # create b vector 
+names(b) <- names(win)
+diagonal <- sapply(names(teams), function(x) sum(dat$Visitor==x, dat$Home==x,2)) # create diagonal values counting the total number of games each team played +2
+
+C <- diag(diagonal) # add diagonal values for C
+
+for (i in names(teams)){
+  for(j in names(teams)){
+    if (i!=j){
+    new <- dat %>% filter(Visitor == i & Home == j)
+    new2 <- dat %>% filter(Visitor==j & Home==i)
+    C[teams[[i]],teams[[j]]] <- -(nrow(new)+nrow(new2))
+    C[teams[[j]],teams[[i]]] <- C[teams[[i]],teams[[j]]]}
+  }
+  print(i)
+}
+r <- solve(C,as.numeric(b))
+names(r) <- names(teams)
+colley_ranking <- cbind(names(sort(r,decreasing = TRUE)),sort(r,decreasing = TRUE))
+colley_ranking <- data.frame(colley_ranking)
+colnames(colley_ranking) <- c("colley_Team","colley_Value")
+View(cbind(eigen_ranking,colley_ranking))
+
+names(teams)
+sapply(names(teams),function(x) which(eigen_ranking$Team==x)-which(colley_ranking$colley_Team==x))
+View(dat %>% filter(Home=="Seattle Kraken"|Visitor=="Seattle Kraken"))
+
+# win
+# b
+# lose
+# C[teams[["Chicago Blackhawks"]],teams[["St. Louis Blues"]]]
+# plot(colley_ranking$colley_Value)
+
+```
+
+```{r}
+seattle <- dat %>% filter(Home=="Seattle Kraken"|Visitor=="Seattle Kraken")
+C[26,]
+C[,26]
+names(teams)[5]
+names(teams)[30]
+filter(dat,win=="Seattle Kraken")
+blue_lose <- filter(dat,lose=="St. Louis Blues")
+blue_win <- filter(dat,win=="St. Louis Blues")
+sum(unique(c(blue_lose$Visitor,blue_lose$Home)) %in% unique(c(blue_win$Visitor,blue_win$Home)))
+unique(c(blue_win$Visitor,blue_win$Home))
+blue_lose
+blue_win
+# eigen ranking is high because when they lost they lost by little, but won by a lot against the same team
+win
+lose
+
+win
+lose
+```
+
+

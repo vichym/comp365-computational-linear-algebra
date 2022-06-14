@@ -1,0 +1,718 @@
+---
+title: "| Computational Linear Algebra    \n| HW5: Least Squares Problems and QR Factorization \n"
+author: "Vichearith Meas"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: yes
+    toc_float: yes
+    toc_depth: 1
+    theme: cerulean
+    css: style.css
+---
+
+The following line sources functions from the class file `365Functions.r`. Feel free to use any of these functions throughout the semester.
+
+```{r, message=FALSE}
+source("https://www.macalester.edu/~dshuman1/data/365/365Functions.r")
+library(Matrix)
+library(mosaic)
+```
+
+# Problem 1: A symmetric, positive definite matrix
+
+Let $v_1, v_2, \ldots, v_n$ be a sequence of $n$ vectors in $\mathbb{R}^m$, and let $\lambda_1,\lambda_2, \ldots,\lambda_n$ be a sequence of **strictly positive** numbers. Define the matrix $C$ as:
+
+$$ C=\sum_{i=1}^n \lambda_i v_i v_i^T. $$
+
+a)  What is the size of the matrix $C$?
+
+    ::: answer
+    $C$ is a $n$ x $n$ matrix.
+    :::
+
+b)  Show that $C$ is a symmetric matrix.
+
+    ::: answer
+    A $n$x$n$ matrix $A$ is symmetric if $A=A^T$.
+
+    $$
+    C= \lambda_1 v_1 v_1^T + \lambda_2 v_2 v_2^T + \cdots + \lambda_n v_n v_n^T \\
+    \begin{align*}
+    C^T&=( \lambda_1 v_1 v_1^T + \lambda_2 v_2 v_2^T + \cdots + \lambda_n v_n v_n^T )^T \\
+    &=( \lambda_1 v_1 v_1^T)^T + (\lambda_2 v_2 v_2^T)^T + \cdots + (\lambda_n v_n v_n^T )^T \\
+    &= \lambda_1(v_1 v_1^T)^T + \lambda_2( v_2 v_2^T)^T + \cdots + \lambda_n (v_n v_n^T )^T \\
+    &= \lambda_1 (v_1^{T^T} v_1^T) + \lambda_2( v_2^{T^T} v_2^T) + \cdots + \lambda_n (v_n^{T^T} v_n^T ) \\
+    &= \lambda_1 v_1 v_1^T + \lambda_2 v_2 v_2^T + \cdots + \lambda_n v_n v_n^T \\
+    C^T&= C
+    \end{align*}
+    $$
+
+    Therefore, $C$ is symmetric.
+    :::
+
+c)  Show that $C$ is a positive semidefinite matrix.
+
+    ::: answer
+    An $n$ × $n$ real matrix $A$ is positive definite if $x^TAx > 0$ for all vectors $x \in \mathbb{R}^n$ with $x \neq 0$ (and positive semidefinite if $x^T Ax \geq 0$)
+    
+    $$ 
+    \begin{align*}
+    C  &= \lambda\_1 v_1 v_1^T + \lambda\_2 v_2 v_2^T + \cdots + \lambda\_n v_n v_n^T \\ 
+    \\
+    x^TCx  &= x^T(\lambda_1 v_1 v_1^T + \lambda_2 v_2 v_2^T + \cdots + \lambda_n v_n v_n^T)x \\
+    x^T Cx &= \lambda_1 x^Tv_1v_1^Tx + \lambda_2 x^Tv_2v_2^Tx + \cdots + \lambda_n x^Tv_nv_n^Tx \\
+    x^T Cx &= \lambda_1 (v_1^Tx)^2 + \lambda_2 (v_2^Tx)^2 + \cdots + \lambda_n (v_n^Tx)^2 \geq 0 \quad \text{given that } \quad x \neq 0 ; \lambda \geq 0  \\
+    \end{align*}
+    $$
+    Therefore, $C$ is positive semidefinite. 
+    :::
+
+d)  Is $C$ always a (strictly) positive definite matrix? If yes, explain why. If no, state when $C$ is a (strictly) positive definite matrix.
+
+    ::: answer
+    $C$ a (strictly) positive definite matrix if $x^T Cx = \lambda_1 (v_1^Tx)^2 + \lambda_2 (v_2^Tx)^2 + \cdots + \lambda_n (v_n^Tx)^2  > 0$ or all $v_i^Tx > 0$ for every $x \in \mathbb{R}^m$. In another word, $C$ a (strictly) positive definite matrix if there is no $x \in \mathbb{R}^m$ that is orthogonal to the $span\{v_1,v_2, \cdots, v_n\}$. 
+    
+    However, there is no guarantee that such condition is always true if $n < m$. 
+    :::
+
+# Problem 2: An orthogonal projector
+
+A square matrix $P$ is a ***projector*** if $P^2=P$. A projector is an ***orthogonal projector*** if $P^T=P$. Let $A$ be an $m \times n$ matrix with $m \geq n$. Recall from class that we showed that the orthogonal projection of a vector b onto the column space of $A$ is given by $$\hat{b}=A A^+ b=A(A^T A)^{-1}A^Tb=Pb, $$ where $A^+$ is the pseudoinverse of $A$. Show that according to the definitions above, the matrix $P=A(A^T A)^{-1}A^T$ is indeed an orthogonal projector.
+
+Hint: the transpose of the inverse of an invertible matrix is the inverse of the transpose of that invertible matrix.
+
+
+:::answer
+
+$$
+\begin{align*}
+P^2 &= PP \\
+&= A A^+A A^+ \\
+&= A(A^T A)^{-1}A^TA(A^T A)^{-1}A^T\\
+&= A[(A^T A)^{-1}(A^TA)](A^T A)^{-1}A^T\\
+&= A[B^{-1}B](A^T A)^{-1}A^T \quad ; \quad B = A^T A\\
+&= A(A^T A)^{-1}A^T\\
+P^2 &= P
+\end{align*}
+$$
+Therefore, $P$ is a projector. 
+
+$$
+\begin{align*}
+P&=A(A^T A)^{-1}A^T \\
+\\
+P^T &= [A(A^T A)^{-1}A^T]^T \\
+ &= (A^T)^T[A(A^T A)^{-1}]^T \\
+&= (A)[(A^T A)^{-1}]^TA^T \\
+&= (A)[(A^T A)^{T}]^{-1}A^T \\
+&= (A)(A^T A^{T^T})^{-1}A^T \\
+&= A(A^T A)^{-1}A^T \\
+P^T &= P
+\end{align*}
+$$
+ 
+Therefore, $P$ is a orthogonal projector.
+
+:::
+
+\
+
+# Problem 3: Fitting a quadratic model
+
+*Note: This is Exercise 2 from Activity 16*
+
+Consider the points:
+
+```{r}
+t<-1:8
+y<-c(1,3,2,5,5,7,7,7)
+plot(t,y,col='red',pch=20,cex=2,xlim=c(1,8),ylim=c(0,10))
+grid()
+```
+
+a)  Setup the normal equations and solve them with `R`'s `solve` function in order to find the least squares line fit for this data. Plot your regression line on the same plot with the points.
+
+    :::answer
+    ```{r}
+    A = cbind(t, intercept = rep(1, length(t)))
+    A_T = t(A)
+    beta = solve(A_T %*% A) %*% A_T %*% y
+    beta
+    
+    ```
+    ```{r}
+    plot(t,y,col='red',pch=20,cex=2,xlim=c(1,8),ylim=c(0,10))
+    abline(0.5, 0.9166667)
+    ```
+    
+    :::
+
+
+b)  Setup and solve the normal equations in order to find the least squares parabola fit (i.e., polynomial of degree 2) for this data. Plot your best fit curve on the same plot with the points. Once you have your regressed coefficients `coeffs`, you can also plot the predicted values and residuals with the following code:
+
+    <!-- -->
+    
+        # predicted values
+        bhat <- A %*% coeffs
+        points(t,bhat,col='black',pch=19,cex=1)
+        # residuals
+        r <- y - bhat
+        for (i in 1:length(t)) lines(c(t[i],t[i]),c(y[i],bhat[i]))
+        
+    ::: answer
+    ```{r}
+    
+    p2b_A <- cbind(intercept = rep(1, length(t)),t1 = t, t2= t^2)
+    p2b_A_T = t(p2b_A)
+    coeffs = solve(p2b_A_T %*% p2b_A, p2b_A_T %*% y)
+
+    coeffs
+    bhat <- p2b_A %*% coeffs
+    
+    plot(t,y,col='red',pch=20,cex=2,xlim=c(1,8),ylim=c(0,10))
+    points(t,bhat,col='black',pch=19,cex=1)
+    #add polynomial curve to plot
+    lines(t, bhat, col='black', lwd=1)
+    r <- y - bhat
+    for (i in 1:length(t)) lines(c(t[i],t[i]),c(y[i],bhat[i]))
+    ```
+    
+    :::
+
+c)  Do you expect $||Ax_*-b||_2^2$ (the sum of squared residuals) to be lower for part a) or part b)? Why? Explain in plain English and using linear algebra vocabulary. Does your answer depend on the set of data given to you? Compute the sum of squared residuals for part a) and part b) to see if it matches your intuition.
+
+    :::answer
+    I expect the sum of squared residuals from part b to be lower because part b we use quadratic equation to fit the data. Quadratic equation has higher degree of freedom allowing more flexibility for the model to fit the data reducing the mean sqare error. When we perform linear regression, we do 2 dimensional approximation  while the quadratic is a 3 dimensional approximation. 
+    Even if the data point fit more with a linear model, the quadratic can also capture this relationship by having the coefficient of $x^2$ to be 0. 
+    :::
+
+\
+
+#### STAT 155 Sidebar
+
+Many of you are taking or have completed STAT 155. There you do linear regression problems every day with the command `lm`. We can now understand that this function is doing an orthogonal projection to solve a least squares problem with linear algebra techniques. Here is the same example of fitting a parabolic model, as you would do it in STAT 155:
+
+```{r}
+myData<-data.frame(t,y)
+# In STAT 155, these are called transformation terms
+myData<-transform(myData,t1=t,t2=t^2)
+mod <- lm(y ~ t1+t2,data=myData)
+print(summary(mod))
+mod
+q155<-makeFun(mod)
+xyplot(y+fitted(mod) ~ t, data = myData)
+plotFun(q155(t1=t, t2 = t^2) ~ t, add = TRUE, col = "red")
+```
+
+You can double check, for example, the value of $R^2=1-\hbox{var}(residuals)/\hbox{var}(response)$ for the model you computed with the normal equations to check it matches the one computed by the `summary` function in the `mosaic` package:
+
+    r.squared<-1-var(r)/var(y)
+    print(r.squared)
+
+Life may be easier when you don't strive to understand the details, but it is so much more satisfying when you do!!!
+
+\
+
+# Problem 4: Reduced and full QR factorizations
+
+You should do part (a) of this problem ***by hand***.
+
+a)  Use the classical Gram-Schmidt orthogonalization algorithm to find the reduced QR factorization and full QR factorization of the matrix
+    
+    $$ A = \begin{pmatrix}
+    2 & 3 \\
+    -2 & -6 \\
+    1 & 0
+    \end{pmatrix}.
+    $$
+
+    :::answer
+    For $v_1$ and $v_2$ columns vector of $A$: 
+    
+    $$
+    v_1 = \begin{pmatrix}2 \\-2 \\1\end{pmatrix} ;
+    v_2 = \begin{pmatrix}3 \\-6 \\0\end{pmatrix} 
+    $$
+    We can find a set of orthogonalized vectors $q_1$ and $q_2$ that span the same space of $v_1$ and $v_2$ below: 
+    
+    $$
+    \begin{align*}
+    y_1 &= v_1 \\\\
+    ||y_1||_2 &= \sqrt{2^2 + (-2)^2 + (1)^2} \\
+    &= \sqrt{9} \\
+    &= 3 \\ 
+    q_1 &= \frac{1}{||y_1||_2}y_1  
+    = \frac{1}{3}\begin{pmatrix}2 \\-2 \\1\end{pmatrix}
+    = \begin{pmatrix}\frac{2}{3}\\ -\frac{2}{3}\\ \frac{1}{3}\end{pmatrix}
+    \end{align*}
+    $$
+    
+    $$
+    \begin{align*}
+    y_2 &=v_2 − q_1q_1^Tv_2 \\
+    &= v_2 − q_1
+    \begin{pmatrix}\frac{2}{3}& -\frac{2}{3}& \frac{1}{3}\end{pmatrix}
+    \begin{pmatrix}3 \\-6 \\0\end{pmatrix}\\
+    &= \begin{pmatrix}3 \\-6 \\0\end{pmatrix} − \begin{pmatrix}\frac{2}{3}\\ -\frac{2}{3}\\ \frac{1}{3}\end{pmatrix}6\\
+    &= \begin{pmatrix}3 \\-6 \\0\end{pmatrix} − \begin{pmatrix}4\\ -4\\ 2\end{pmatrix}\\
+    &= \begin{pmatrix}-1\\ -2\\ -2\end{pmatrix}\\
+    ||y_2||_2 &= \sqrt{(-1)^2+(-2)^2 +(-2)^2} \\
+    &= \sqrt{9} \\
+    &= 3 \\ 
+    q_2 &= \frac{1}{||y_2||}y_2  
+    = \frac{1}{3}\begin{pmatrix}-1\\ -2\\ -2\end{pmatrix} 
+    = \begin{pmatrix}-\frac{1}{3}\\ -\frac{2}{3}\\ -\frac{2}{3}\end{pmatrix}
+    \end{align*}
+    $$
+    With $q_1$ and $q_2$, we get $Q$ and can find $R$. 
+    $$
+    \begin{align*}
+    A &= QR \\
+    \begin{pmatrix}
+    | & |  \\
+    v_{1}& v_{2}\\
+    | & | 
+    \end{pmatrix} &= 
+    \begin{pmatrix}
+    | & |  \\
+    q_{1} & q_{2}\\
+    | & | 
+    \end{pmatrix}
+    \begin{pmatrix}
+    r_{11} & r_{12}\\
+    0  & r_{22}\\
+    \end{pmatrix}
+    \end{align*} 
+    \Rightarrow 
+    Q^TA = Q^TQR = R  
+    $$
+    $$
+    Q =
+    \begin{pmatrix}
+    \frac{2}{3} & -\frac{1}{3}\\ 
+    -\frac{2}{3} &-\frac{2}{3}\\ 
+    \frac{1}{3} &  -\frac{2}{3}
+    \end{pmatrix} \Rightarrow
+    Q^T =\begin{pmatrix}\frac{2}{3}&-\frac{2}{3}&\frac{1}{3}\\ -\frac{1}{3}&-\frac{2}{3}&-\frac{2}{3}\end{pmatrix} \\
+    R = \begin{pmatrix}\frac{2}{3}&-\frac{2}{3}&\frac{1}{3}\\ \:\:-\frac{1}{3}&-\frac{2}{3}&-\frac{2}{3}\end{pmatrix}\:\begin{pmatrix}2\:&\:3\:\\ \:-2\:&\:-6\:\\ \:1\:&\:0\end{pmatrix} = \begin{pmatrix}3&6\\ 0&3\end{pmatrix} \\
+    $$
+    
+    $$
+    \text{QR Decomposition of $A$: }\qquad 
+    A = 
+    \begin{pmatrix}
+    \frac{2}{3} & -\frac{1}{3}\\ 
+    -\frac{2}{3} &-\frac{2}{3}\\ 
+    \frac{1}{3} &  -\frac{2}{3}
+    \end{pmatrix}
+    \begin{pmatrix}3&6\\ 0&3\end{pmatrix}
+    $$
+   
+    To find $\overline Q$, we need to find the additional basis for the orthogonal complement of the column space of $A$, which is equal to the nullspace of $A^T$.
+    
+    Let $v_3 = \begin{pmatrix} 1 \\0\\0\end{pmatrix}$, a linearly independent vector to $v_1$ and $v_2$ and simple to work with. 
+    
+    From here we can find $q_3$, the last column of $\overline Q$ that othonormal to $q_1$ and $q_2$. 
+    
+    \begin{align*}
+    y_3 &=v_3 − (q_1q_1^Tv_3 + q_2q_2^Tv_3) \\
+    &= \begin{pmatrix} 1 \\0\\0\end{pmatrix} - \left[   q_1\begin{pmatrix}\frac{2}{3} & -\frac{2}{3} & \frac{1}{3}\end{pmatrix}\begin{pmatrix} 1 \\0\\0\end{pmatrix} + q_2 \begin{pmatrix}-\frac{1}{3}& -\frac{2}{3}& -\frac{2}{3}\end{pmatrix}\begin{pmatrix} 1 \\0\\0\end{pmatrix} \right]\\
+    &= \begin{pmatrix} 1 \\0\\0\end{pmatrix} - \left[   \begin{pmatrix}\frac{2}{3} \\ -\frac{2}{3} \\ \frac{1}{3}\end{pmatrix}\begin{pmatrix}\frac{2}{3}\end{pmatrix} +  \begin{pmatrix}-\frac{1}{3}\\ -\frac{2}{3}\\ -\frac{2}{3}\end{pmatrix}\begin{pmatrix}-\frac{1}{3}\end{pmatrix} \right]\\
+    &= \begin{pmatrix} 1 \\0\\0\end{pmatrix} - \begin{pmatrix}\frac{5}{9}\\ -\frac{2}{9}\\ \frac{4}{9}\end{pmatrix}\\
+    &= \begin{pmatrix}\frac{4}{9}\\ \frac{2}{9}\\ -\frac{4}{9}\end{pmatrix}\\
+    
+    ||y_3||_2 &= \sqrt{ (\frac{4}{9})^2 +  (\frac{2}{9})^2+ (-\frac{4}{9})^2} \\
+    &= \frac{2}{3} \\
+    
+    q_3 &= \frac{1}{||y_3||_2}y_3 = \frac{3}{2}  \begin{pmatrix}\frac{4}{9}\\ \frac{2}{9}\\ -\frac{4}{9}\end{pmatrix} = \begin{pmatrix}\frac{2}{3}\\ \frac{1}{3}\\ -\frac{2}{3}\end{pmatrix}
+    \end{align*}
+
+    
+    With $q_3$, we get: 
+    
+    $$
+    \overline Q = 
+    \begin{pmatrix}
+    \frac{2}{3} & -\frac{1}{3} & \frac{2}{3} \\ 
+    -\frac{2}{3} &-\frac{2}{3} &  \frac{1}{3}\\ 
+    \frac{1}{3} &  -\frac{2}{3} & -\frac{2}{3}
+    \end{pmatrix} ; \overline R = \begin{pmatrix}
+    3&6\\
+    0&3 \\
+    0&0
+    \end{pmatrix}
+    $$
+    
+    $$
+    \text{Full QR Decomposition of $A$: }\qquad 
+    A = 
+    \begin{pmatrix}
+    \frac{2}{3} & -\frac{1}{3} & \frac{2}{3} \\ 
+    -\frac{2}{3} &-\frac{2}{3} &  \frac{1}{3}\\ 
+    \frac{1}{3} &  -\frac{2}{3} & -\frac{2}{3}
+    \end{pmatrix}
+    \begin{pmatrix}
+    3&6\\
+    0&3 \\
+    0&0
+    \end{pmatrix}
+    $$
+    :::
+
+
+
+b)  First check your answers by checking that $A=QR$ and $A=\overline{Q}\overline{R}$. Then check if you computed the same factorizations as the `qr` function in R, which you can do with the following code
+
+    <!-- -->
+    
+        # Reduced QR
+        out<-qr(A)
+        (R<-qr.R(out))
+        (Q<-qr.Q(out))
+        Q%*%R
+    
+    Note that `R`'s `qr` algorithm does not ensure that all of the diagonal entries of $R$ are nonnegative (in which case the factorization is not unique). If you want to force the $R$ matrix to have positive diagonals, you can form a diagonal matrix $S$ whose $i^{th}$ diagonal is equal to the sign of the $i^{th}$ diagonal of $R$. Then let $\tilde{Q}=QS$ and $\tilde{R}=SR$, so that $\tilde{Q}\tilde{R}=QS^2 R=QR=A$ (since $S^2=I$).
+    
+        # Fix signs
+        s<-sign(diag(R))
+        S<-diag(s)
+        Q.tilde<-Q%*%S
+        R.tilde<-S%*%R
+        Q.tilde%*%R.tilde
+    
+        # Full QR
+        (R.bar<-qr.R(out,complete=TRUE))
+        (Q.bar<-qr.Q(out,complete=TRUE))
+        Q.bar%*%R.bar
+        
+    
+    
+    :::answer 
+    
+    The factorization is the same except the sign are switch around between $R$ and $Q$, yet resulting in the same $A$. 
+    ```{r}
+    # Reduced QR
+    p4_A = cbind(c(2,-2,1), c(3,-6,0))
+    out<-qr(p4_A)
+    (R<-qr.R(out))
+    (Q<-qr.Q(out))
+    Q%*%R
+    
+    ```
+    
+    :::
+
+c)  Use the reduced QR factorization of $A$ from part (a) to find the least squares solution to $$ \begin{pmatrix}
+    2 & 3 \\
+    -2 & -6 \\
+    1 & 0
+    \end{pmatrix}
+    \begin{pmatrix}
+    x_1 \\
+    x_2
+    \end{pmatrix}
+    =
+    \begin{pmatrix}
+    3 \\
+    -3\\
+    6
+    \end{pmatrix}
+    .$$
+
+    :::answer
+    Solve for $\overline x$ which 
+    $$ 
+    \begin{align*}
+    A^TA\overline x &= A^Tb \\
+    (QR)^T(QR)\overline x &= (QR)^Tb \\
+    R^TQ^TQR\overline x &= R^TQ^Tb \\
+    R\overline x &= Q^Tb \\
+    \end{align*}
+    $$
+    
+    ```{r}
+    p4_b = c(3,-3,6)
+    p4_x_bar = solve(R, t(Q)%*%p4_b)
+    p4_x_bar
+    ```
+    Therefore, $$\overline x = \begin{pmatrix} 4 \\ -1\end{pmatrix}$$
+    :::
+
+
+
+d)  You can check that $\overline{Q}^{\top}b=\begin{bmatrix} 6 \\ -3 \\ -3 \end{bmatrix}$. Without doing extra computations (i.e., do not actually multiply out $Ax_*-b$), what is the squared error $||Ax_* - b||_2^2$ associated with the least squares solution in part (c)?
+
+    ::: answer
+    $$
+    ||Ax -b|| = ||QRx-b|| = ||\overline Q \overline Rx -b|| \\
+    ||Ax -b||_2^2 =  ||\overline Q \overline Rx -b||_2^2 = ||\overline Q^T(\overline Q \overline Rx -b)||_2^2 = ||Rx - Q^Tb||_2^2 + ||\hat Q^Tb||_2^2
+    $$
+    
+    However, from part (c), we have $R \overline x = Q^Tb$ which make $||Ax -b||_2^2 =||\hat Q^Tb||_2^2$
+    
+    $$
+    \begin{align*}
+    \overline Q &=
+    \left[\begin{array}{ccc|c}
+      & &   &\\
+      &Q&   &\hat Q \\
+      & &   &\\
+    \end{array}\right] 
+    =
+    \left[\begin{array}{cc|c} 
+    	\vert & \vert & \vert\\ 
+    	q_1 & q_2 & q_3 \\ 
+    	\vert & \vert & \vert
+    \end{array}\right] \\
+    \overline Q^Tb &= 
+    \left[\begin{array}{cccc}
+     && &&\\ 
+     && Q^T&&\\ 
+     && &&\\ 
+     \hline
+     && \hat Q^T&&
+    \end{array}\right]b
+    = 
+    \left[\begin{array}{ccc} 
+    	- & q_1 &  -\\
+    	 - & q_2 &  -\\
+    	 \hline
+    	 - & q_3 & - 
+    \end{array}\right]b  = 
+    \begin{bmatrix} 6 \\ -3 \\ -3 \end{bmatrix} \\
+    \end{align*}\\
+    \Downarrow \\
+    \hat Q^Tb = -3  \Rightarrow ||\hat Q^Tb||_2^2 = 9
+    $$
+    Therefore, $||Ax -b||_2^2= 9$. 
+    :::
+
+
+
+e)  Recall that if $A$ is an $m\times n$ matrix, the null space of $A^{\top}$ is the orthogonal complement of the column space of $A$ and $\hbox{dim}(\hbox{null}(A^{\top}))+\hbox{dim}(\hbox{col}(A))=m$. Use the full QR factorization of the $A$ matrix above to find a basis for the null space of $A^{\top}$.
+
+    :::answer 
+    The basis for the null space of $A^T$ is the third column of $\overline Q$
+    $$\begin{pmatrix}\frac{2}{3}\\ \frac{1}{3}\\ -\frac{2}{3}\end{pmatrix}$$
+    :::
+
+\
+
+# Problem 5: Fitting a surge model
+
+*Note: Before doing this problem, read Section 4.2.2 in the book.*
+
+The data for a drug concentration model corresponding to Computer Problem 6 in Section 4.2 is here:
+
+```{r}
+hour <- (1:10)
+concentration <- c(6.2,9.5,12.3,13.9,14.6,13.5,13.3,12.7,12.4,11.9)
+
+plot(hour,concentration,pch=19,col='black',
+     xlim=c(0,16),ylim=c(0,20),ylab="concentration (ng/ml)",xlab='time (hours)')
+grid()
+```
+
+You'd like to fit a "surge" model of the form
+
+$$y = c\cdot t \cdot e^{k\cdot t} $$
+
+The problem is that this is not linear.
+
+But logarithms come to the rescue!
+
+$$ \ln(y)  = \ln(c \cdot t \cdot e^{k \cdot t}) =  \ln(c) + \ln(t) + k \cdot t, $$
+
+so
+
+$$ \ln(c) + k\cdot t = \ln(y) - \ln(t) $$
+
+The LHS is linear in $t$. The RHS is a constant (since both $y$ and $t$ are given). The unknowns are $\ln(c)$ and $k$.
+
+Use a least-squares fit of a line to this data to get $\ln(c)$ and $k$. Then reassemble the answer into the function $y = c \cdot t \cdot e^{k \cdot t}$ and plot it along with the data.
+
+Report your values of $c$ and $k$ and give a plot.
+
+:::answer
+
+$$
+ln(c) + k\cdot t_i = \ln(y_i) - \ln(t_i) \\
+\begin{pmatrix}
+    1 & t_1 \\
+    1 & t_2 \\
+    \vdots & \vdots\\
+    1 & t_{10}
+    \end{pmatrix}
+\begin{pmatrix}
+    ln(c)\\
+    k\\
+\end{pmatrix}
+    =
+\begin{pmatrix}
+     \ln(y_1) - \ln(t_1)\\
+    \vdots \\
+     \ln(y_{10}) - \ln(t_{10})\\
+\end{pmatrix} \\
+Ax = b 
+$$
+
+
+To get least squares fit, we need to solve for $\overline x$, solution to normal equation: 
+$$A^TA\overline x = A^Tb$$
+
+
+
+```{r}
+p5_A = cbind(rep(1, length(hour)), hour)
+p5_A_T = t(p5_A)
+p5_b = log(concentration) - log(hour)
+
+p5_solution = solve(p5_A_T%*%p5_A,  p5_A_T %*% p5_b)
+p5_solution
+
+p5_c = exp(1.963192)
+p5_k = -0.183849 
+```
+
+We get $ln(c)=1.963192 \Rightarrow c = 7.122024$ and $k=-0.183849$. Plugging this into $y = c\cdot t \cdot e^{k\cdot t}$ and plot the line along all the data points:
+
+
+```{r}
+p5_y = p5_c*hour*exp(-0.183849*hour)
+plot(hour,concentration,pch=19,col='black',
+     xlim=c(0,16),ylim=c(0,20),ylab="concentration (ng/ml)",xlab='time (hours)')
+lines(hour, p5_y, col='red', lwd=1)
+grid()
+
+```
+:::
+
+\
+
+# Problem 6: Fitting a circular model
+
+The vectors $u$ and $v$ below are the x-coordinates and y-coordinates of 50 points $(u_i,v_i)$ in the plane. We want to fit a circle to these points. Denote the center of the circle by $(u_c,v_c)$ and the radius by $R$. A point $(u,v)$ is on the circle if $(u-u_c)^2+(v-v_c)^2=R$. We can therefore formulate the fitting problem as
+
+$$\min_{u_c,~v_c,~R} \left\{\sum_{i=1}^{50} \left[(u_i-u_c)^2+(v_i-v_c)^2-R^2\right]^2  \right\}.$$
+
+If we do a change of variable $w=u_c^2+v_c^2-R^2$, then we can write the above problem as a linear least squares problem $$\min_{x}||Ax-b||^2,$$ where $x=\begin{bmatrix} u_c \\ v_c \\ w \end{bmatrix}$.
+
+```{r}
+u <- c(-3.9265307,-3.1716160e+00,-1.6115988e+00,-2.6679398e+00,-1.7299714e+00,-2.2185018e+00,-2.0618500e+00,-1.4774499e+00,-3.2095408e+00,-2.0139385e+00,-2.0965393e+00,-2.8414848e+00,-3.5516322e+00,-2.3325005e+00,-1.6889345e+00,-1.4937155e+00,-1.3103945e+00,-1.3082423e+00,-1.5221371e+00,-1.8621796e+00,-2.8784185e+00,-3.3058351e+00,-2.9418136e+00,-3.5689305e+00,-3.2715656e+00,-1.8167830e+00,-2.6160985e+00,-3.6369299e+00,-3.6094960e+00,-3.8213899e+00,-3.5639197e+00,-2.9667150e+00,-1.9473222e+00,-3.0470691e+00,-2.8955875e+00,-3.2029692e+00,-2.2688964e+00,-2.3212990e+00,-1.1585153e+00,-1.8993455e+00,-3.5771792e+00,-2.6473229e+00,-1.4699478e+00,-3.7978927e+00,-2.0968345e+00,-4.0118440e+00,-2.2415905e+00,-1.3737454e+00,-2.0935937e+00,-1.4260492e+00)
+
+v <- c(5.7992251e+00,7.3130620e+00,7.5592434e+00,7.6911348e+00,5.5113079e+00,7.7442101e+00,7.7091849e+00,6.0549104e+00,7.5170875e+00,7.6045473e+00,5.1354212e+00,
+5.0671844e+00,7.3910732e+00,7.6949226e+00,5.3469286e+00,7.3473664e+00,6.8715471e+00,6.7842012e+00,5.7283630e+00,7.7633148e+00,7.7677261e+00,5.4778857e+00,5.0690285e+00,5.5246190e+00,7.6772318e+00,5.3181407e+00,7.6148680e+00,7.3524730e+00,6.0303455e+00,5.8476992e+00,5.8479253e+00,5.3237261e+00,5.1703804e+00,5.4245981e+00,7.7991795e+00,5.5734007e+00,7.8705366e+00,5.1617927e+00,6.1579013e+00,5.4067639e+00,7.2445803e+00,7.6805233e+00,6.1180277e+00,7.3691475e+00,7.6463880e+00,6.1479510e+00,7.7414349e+00,7.2054473e+00,5.2385698e+00,5.8594283e+00)
+```
+
+a)  Define $A$ and $b$ in this least squares formulation. What are their dimensions?
+
+    :::answer
+    
+    We are trying to minimizing $(u_i-u_c)^2+(v_i-v_c)^2-R^2$. For the exact answer $(u_c, v_c)$, we will get the equation to be 0. 
+    $$
+    \begin{align*}
+    (u_i-u_c)^2+(v_i-v_c)^2-R^2 &= 0 \\
+    (u_i^2 - 2u_iu_c + u_c^2) + (v_i^2 - 2v_iv_c + v_c^2) - R^2 &= 0 \\
+      2u_iu_c - u_c^2 + 2v_iv_c - v_c^2 +  R^2 &= u_i^2  + v_i^2 \\
+      2u_iu_c  + 2v_iv_c - ( u_c^2 + v_c^2 -  R^2 )&= u_i^2  + v_i^2  \\
+      2u_iu_c  + 2v_iv_c - w &= u_i^2  + v_i^2  \\
+      \begin{pmatrix}
+        2u_1 & 2v_1 & -1 \\
+        2u_2 & 2v_2 & -1 \\
+        \vdots & \vdots & \vdots \\
+        2u_{50} & 2v_{50} & -1 \\
+    \end{pmatrix} \cdot
+    \begin{pmatrix}
+        u_c \\
+        v_c \\
+        w
+    \end{pmatrix} &= 
+    \begin{pmatrix}
+        u_1^2 + v_1^2 \\
+        u_1^2 + v_1^2 \\
+        \vdots \\
+        u_{50}^2 + v_{50}^2 \\
+    \end{pmatrix} \\
+    Ax &= b
+    \end{align*}
+    $$
+    
+    
+    Therefore, we have $A$ an 50 by 3 matrix and $b$ and 50 by 1 vector $$A= \begin{pmatrix}
+        2u_1 & 2v_1 & -1 \\
+        2u_2 & 2v_2 & -1 \\
+        \vdots & \vdots & \vdots \\
+        2u_{50} & 2v_{50} & -1 \\
+    \end{pmatrix} ; b = \begin{pmatrix}
+        u_1^2 + v_1^2 \\
+        u_1^2 + v_1^2 \\
+        \vdots \\
+        u_{50}^2 + v_{50}^2 \\
+    \end{pmatrix}$$ 
+    :::
+
+
+b)  Solve the least squares problem to find $u_c$, $v_c$, and $w$ (you can solve the normal equations or use `qr.solve`), and then use the change of variable equation to find $R$.
+
+
+    :::answer 
+    
+    To find the $\overline x$, the solution to the least square problem: $A^TA\overline x = A^Tb$. 
+    ```{r}
+    p6_A = cbind(2*u, 2*v , rep(-1, length(u)))
+    p6_b = u^2 +v^2
+    p6_x_bar = qr.solve(p6_A, p6_b)
+    p6_x_bar
+    ```
+    
+    We get $$
+    \begin{align*}
+    u_c &= -2.567143 \\
+    v_c &= 6.468049  \\
+    w &= 46.679801 \\
+    \end{align*}
+    $$
+    Therefore $$
+    \begin{align*}
+    u_c^2+v_c^2-R^2 &= 46.679801 \\
+    R^2 & = u_c^2+v_c^2-46.679801\\
+    R & = \sqrt{(-2.567143)^2+(6.468049)^2-46.679801}\\
+    R &= 1.32139
+    \end{align*}$$
+
+    :::
+
+c)  To double check your work, let's plot the data and the fitted circle using the following code:
+
+    <!-- -->
+    
+        # enter your values for uc, vc, and R here
+        uc<-
+        vc<-
+        R<-
+    
+        # plot code
+        t<-seq(0,2*pi,length=1000) # parameterize points on the circle
+        par(pty="s") # for the plot to be square
+        plot(R*cos(t)+uc,R*sin(t)+vc,type='l',lty=2,lwd=3,xlim=c(-4.1,-1.1),ylim=c(5,8),xlab="u",ylab="v") # plot the best fit line
+        points(u,v,pch=19,col="red") # plot the initial data points
+        points(uc,vc,pch=4) # plot an x at the center point (uc,vc)
+        
+    :::answer
+    ```{r}
+        # enter your values for uc, vc, and R here
+        uc<- -2.567143
+        vc<- 6.468049
+        R<- 1.32139
+    
+        # plot code
+        t<-seq(0,2*pi,length=1000) # parameterize points on the circle
+        par(pty="s") # for the plot to be square
+        plot(R*cos(t)+uc,R*sin(t)+vc,type='l',lty=2,lwd=3,xlim=c(-4.1,-1.1),ylim=c(5,8),xlab="u",ylab="v") # plot the best fit line
+        points(u,v,pch=19,col="red") # plot the initial data points
+        points(uc,vc,pch=4) # plot an x at the center point (uc,vc)
+    ```
+    :::
+

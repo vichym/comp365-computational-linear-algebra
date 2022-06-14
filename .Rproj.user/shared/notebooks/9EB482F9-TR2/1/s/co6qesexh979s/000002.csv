@@ -1,0 +1,2 @@
+"0","eigen_result =  data.frame(colley_ranking = as.matrix(A.eigenvector)) %>%"
+"0","  mutate(names = data_summary$names)"

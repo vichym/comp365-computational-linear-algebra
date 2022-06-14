@@ -1,0 +1,7 @@
+"0","data <- as.data.frame(read.csv('nhl2122.csv')) %>%"
+"0","    clean_names() %>% "
+"0","    rename(visitor_score = g, home_score = g_1) %>% "
+"0","    select(-c(x, att, log, notes, date))"
+"0","# team vector for index sorted in aphabetically order"
+"0","teams <- sort(union(unique(data$visitor), unique(data$home)))"
+"0",""

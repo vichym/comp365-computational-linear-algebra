@@ -1,0 +1,6 @@
+"0","# The following lines generate the 400 data points:"
+"0","set.seed(365)"
+"0","xx<-c(0,100*runif(398),100)"
+"0","n.points<-length(xx)"
+"0","yy<-sin(xx/18+pi/4)+.7*cos(xx/8)+.1*sin(xx/5)+2*runif(n.points)"
+"0","P4Data<-data.frame(xx=xx,yy=yy)"

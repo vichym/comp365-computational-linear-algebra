@@ -1,0 +1,232 @@
+
+COMP356 Technical Report 2 Code
+
+Original file is located at
+    https://colab.research.google.com/drive/10Cq8ymgdLykexDemWkhfl_ZkHHBGWRPl
+
+# Technical Report 2
+
+This is where we wrtie code and run.
+"""
+```{r}
+library(Matrix)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(tibble)
+library(janitor)
+source('https://www.macalester.edu/~dshuman1/365/365Functions.r')
+```
+
+### Import Data
+We might need to **upload the file** to the localstorage on this Colab every session.
+
+```{r}
+
+
+#data frame 
+data <- as.data.frame(read.csv('nhl2122.csv')) %>%
+    clean_names() %>% 
+    rename(visitor_score = g, home_score = g_1) %>% 
+    select(-c(x, att, log, notes, date))
+# team vector for index sorted in aphabetically order
+teams <- sort(union(unique(data$visitor), unique(data$home)))
+
+head(data)
+```
+
+### Data Summary
+
+```{r}
+data_summary = data %>% summarise(
+    win = ifelse(visitor_score > home_score, visitor, home), 
+    lose = ifelse(visitor_score < home_score, visitor, home), 
+    score = abs(visitor_score - home_score))%>% 
+    pivot_longer(cols=c(win, lose), values_to = 'names', names_to = 'result') %>%
+    mutate(result = as.factor(result))%>% 
+    group_by(names, result) %>% 
+    summarise(diff_by_total = sum(score), count = n()) %>% 
+    pivot_wider(
+        id_cols = names,
+     names_from = result,
+  values_from = c(diff_by_total, count)) %>% 
+  mutate( net_score = diff_by_total_win - diff_by_total_lose, 
+          total_game_count = sum(count_lose, count_win)) %>% 
+arrange(names)
+
+head(data_summary)
+```
+
+
+
+# Eigenvalues Ranking
+
+
+```{r}
+data_sum = data %>% mutate(
+                s_visitor = visitor_score/(visitor_score + home_score),     # calculate s_ij
+                s_home = home_score/(visitor_score + home_score)) %>%       # calculate s_ji
+   group_by(visitor, home) %>%                                              # group to collapse the multiple games by (visitor vs home)
+   summarize(s_visitor = sum(s_visitor) , s_home = sum(s_home)) %>%         # sum to between  multiple games by (visitor vs home)
+   mutate(s_visitor = s_visitor/(s_visitor + s_home) , s_home = s_home/(s_visitor + s_home)) # get the a new ration from all multiple games
+
+head(data_sum)
+
+#  Helper function
+INDEXOF = function ( s ) {match(s, data_summary$names)}
+```
+
+
+
+### A Matrix
+```{r}
+
+
+# A Matrix 
+A = diag(1, nrow= length(teams))
+#  loop through every games
+for(i in 1:nrow(data_sum)){
+  # Both game (A vs B) and (B vs A) affect the score S_ab and S_ba so we need to keep updating as we see more match between A & B 
+  new_sum_s_visitor = A[INDEXOF(data_sum$visitor[i]), INDEXOF(data_sum$home[i])]  + data_sum$s_visitor[i] 
+  new_sum_s_home = A[INDEXOF(data_sum$home[i]), INDEXOF(data_sum$visitor[i])] + data_sum$s_home[i]
+  total_sum =new_sum_s_home + new_sum_s_visitor
+  # update the new value of s_ij and s_ji 
+  A[INDEXOF(data_sum$visitor[i]), INDEXOF(data_sum$home[i])] = new_sum_s_visitor/total_sum
+  A[INDEXOF(data_sum$home[i]), INDEXOF(data_sum$visitor[i])] = new_sum_s_home/total_sum
+}
+A
+```
+
+### Eigenvalue and Eigenvector
+
+```{r}
+
+
+A.eigen = eigen(A)
+A.lambda = as.numeric(A.eigen$values[1])
+A.eigenvector =as.numeric( A.eigen$vectors[,1])
+
+A.lambda
+A.eigenvector
+
+```
+### Eigen Ranking Result
+
+```{r}
+
+
+
+eigen_result =  data.frame(eigen_ranking = A.eigenvector) %>%
+  mutate(names = data_summary$names)%>% # add corresponding team name
+ arrange(desc(eigen_ranking)) %>%       # reorder team based on ranking score
+mutate(eigen_rank = row_number())       # assign rank to teams
+
+eigen_result
+```
+
+# Colley Ranking
+
+The `data_summary` data frame contains necessary information sucha as total number of lose games, win games  and total game about each team for creating Colley's matrix.
+
+```{r}
+
+
+head(data_summary)
+```
+
+### N Matrix
+```{r}
+
+#  count of game between team i and j 
+n_matrix = Matrix(0, nrow = length(data_summary$names), ncol = length(data_summary$names))
+#  Populate count
+for(i in 1:nrow(data)) {       # for-loop over rows
+  team_i = data$visitor[i]     # visitor team name
+  team_j = data$home[i]        # home team name
+  n_matrix[INDEXOF(team_i), INDEXOF(team_j)] = n_matrix[INDEXOF(team_i), INDEXOF(team_j)] + 1   # count the time both team meets
+  n_matrix[INDEXOF(team_j), INDEXOF(team_i)] = n_matrix[INDEXOF(team_i), INDEXOF(team_j)]       # both count are the same for N_ji and N_ji
+}
+```
+
+### C Matrix
+```{r}
+
+
+# the Colley Matrix 
+C_matrix = diag(2 + data_summary$total_game_count, ncol = length(teams) ) - n_matrix
+
+```
+#### B vector
+
+```{r}
+
+
+# The b vector n x 1  on the right with b_i = 1 + 0.5*(wi − li)
+colley_b_vector  = 1 + 0.5*(data_summary$count_win - data_summary$count_lose)
+
+colley_b_vector
+```
+
+### Colley Ranking Result
+
+```{r}
+colley_ranking_vector = solve(C_matrix, colley_b_vector)
+
+colley_result = data.frame(colley_ranking = as.matrix(colley_ranking_vector)) %>%
+ mutate(names = data_summary$names) %>%     # add corresponding team names
+ arrange(desc(colley_ranking)) %>%          # reorder based on ranking score
+mutate(colley_rank = row_number())          # assign ranking
+
+# colley_result
+colley_result %>% arrange(names)
+```
+
+
+# Result
+
+### Five Thirty Eight Ranking
+Looking at Ranking from the Five Thirty Eight
+
+```{r}
+
+
+
+fte_ranking  = data.frame(names = c("Colorado Avalanche","Florida Panthers","Carolina Hurricanes","Tampa Bay Lightning","Toronto Maple Leafs","Minnesota Wild","Calgary Flames","Boston Bruins"	,"New York Rangers"	,"St. Louis Blues","Edmonton Oilers","Pittsburgh Penguins","Vegas Golden Knights","Washington Capitals","Nashville Predators","New York Islanders","Vancouver Canucks"	,"Dallas Stars"		,"Los Angeles Kings","Winnipeg Jets","Columbus Blue Jackets"	,"Ottawa Senators"	,"Buffalo Sabres"	,"Seattle Kraken"	,"Anaheim Ducks"	,"San Jose Sharks"	,"Chicago Blackhawks"	,"Detroit Red Wings"	,"New Jersey Devils"	,"Arizona Coyotes"	,"Montreal Canadiens","Philadelphia Flyers"), fte_rank = 1:32)
+```
+```{r}
+
+
+
+#  the ranking based on two systems listed by team names
+ranking = inner_join(eigen_result, colley_result) %>% 
+ inner_join(fte_ranking) %>%
+ select(-c(eigen_ranking, colley_ranking))
+
+head(ranking)
+```
+```{r}
+
+
+plot_data = ranking %>% 
+ pivot_longer(cols = c(eigen_rank,colley_rank, fte_rank), names_to = "ranking_type", values_to = "ranking_order") %>%
+ mutate(ranking_type = fct_relevel(ranking_type,c("eigen_rank", "colley_rank", 'fte_rank')))
+head(plot_data)
+
+```
+```{r}
+library("ggbump")
+```
+```{r}
+plot_data %>%
+ ggplot(aes( x=ranking_type, y = ranking_order, color = as.factor(names), group=names)) + 
+ geom_bump(size = 1, smooth = 30, show.legend = T) + 
+ geom_label(data = subset(plot_data, ranking_type == "eigen_rank"), aes(x= ranking_type, label = names, y = ranking_order), nudge_x = -0.6, hjust = 0, size =3) + 
+ geom_label(data = subset(plot_data, ranking_type == "fte_rank"), aes(x= ranking_type, label = names, y = ranking_order), nudge_x = 0.6, hjust = 1, size =3)  + 
+ scale_x_discrete(labels = c("Eigenvector Ranking","Colley's Ranking", "Five Thirty Eight Ranking"), 
+ position = "top")+
+ scale_y_reverse(breaks = 1:32)+
+ labs(title = "Team Ranking", 
+      x = element_blank(), 
+      y = element_blank()) +
+ theme(legend.position = 'none')
+```

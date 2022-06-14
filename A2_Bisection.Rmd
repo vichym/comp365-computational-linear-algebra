@@ -1,0 +1,179 @@
+---
+title: "| Computational Linear Algebra    \n| Activity 2: Bisection Method \n"
+author: "Vichy "
+output:
+  bookdown::html_document2:
+    split_by: none
+    toc: no
+    theme: cerulean
+---
+
+```{r,echo=FALSE,message=FALSE}
+library(ggplot2)
+```
+
+\
+
+```{exercise,name="Implement the bisection method"}
+Implement an `R` function for the bisection method to find a root in a closed interval of a continuous function of one variable. See also the pseudocode in the slides S2.
+
+```
+
+Here is an outline for your function:
+```
+bisect <- function(f,interval,tol=0.5*10^-10,max.its=40){
+  history <- rep(NA, max.its) 
+  
+  # Insert some code here
+  
+  return(list(root=root,history=history[!is.na(history)]))
+}
+```
+Function 
+```{r}
+bisect <- function(f,interval,tol=0.5*10^-10,max.its=40){
+  history <- rep(NA, max.its) 
+  
+  a =  interval[1]
+  b =  interval[2]
+  # Insert some code here
+  if (f(a)*f(b) > 0){
+    return()
+  }
+  
+
+  for( i in 1:max.its){
+    if ((b-a)/2 > tol ){
+      c = (a+b)/2
+      history[i] <- c
+      
+      if(f(c) == 0){
+        root = c
+        break
+      }
+      
+      if(f(a)*f(c) < 0){
+        b = c
+      }else{
+        a = c
+      }
+      
+    }
+  }
+  root <- c
+  
+  return(list(root=root,history=history[!is.na(history)]))
+}
+```
+
+In the first line of the function definition, we set default values for the variables `tol` and `max.its`. That is, the user has the option to enter values for these variables when calling the function, but if they do not enter any values, then the values after the equals signs will be used instead. We stop the procedure when either (i)  the length of the bracket window is below the tolerance or (ii) the maximum number of iterations has been reached.
+
+The variable `history` will track all of the iterative estimates of the root. We initialize it in order to preallocate memory, which speeds up the program.
+
+We want the function to return two variables: the final estimate of the root and the history of all of the intermediate estimates. One way to do this in R is to return a list of variables. Note also that we can shorten the history vector to however many iterations we actually computed (instead of including all of those NAs).
+
+To use our function, we would define a function $f$ and an interval, and then call
+
+```{r}
+out<-bisect(f,interval)
+print(out$root)
+print(out$history)
+```
+
+Here, the dollar sign is a way to access each individual item in the list.
+
+
+\
+
+```{exercise,name="Convergence Check"}
+  
+a. Test your function by running at most 40 iterations of the bisection method on the function $f(x)=x^4-\frac{1}{81}$, with a starting bracket interval of $[0,1]$ and a tolerance of 0.5*10^-10.   
+```
+
+```{r}
+
+f <- function(x){
+  return( x^4-1/81)
+}
+interval <- c(0,1)
+out<-bisect(f,interval)
+print(out$root)
+print(out$history)
+
+
+```
+b. Compute the vector of errors; i.e., the absolute values of the differences between your guesses at each iteration (the `history`) and the actual root of 1/3.  
+
+```{r}
+(errors <- abs(out$history-1/3) )
+
+```
+
+
+c. Then compute the vector of error ratios
+
+
+$$ \left[\frac{e_1}{e_0},\frac{e_2}{e_1},\ldots\right] $$
+to confirm that the algorithm is converging linearly.
+```{r}
+n<-length(errors)
+(ratios<-errors[2:n]/(errors[1:(n-1)]^1))
+(quad.ratios<-errors[2:n]/(errors[1:(n-1)]^2))
+```
+
+
+
+
+**Function Plotting**
+
+Here are two examples of how to plot a function in `R`:   
+
+
+```{r}
+# Define a polynomial function
+f <- function(x) {x^4-1/81}
+# Define a list of x values
+x <- seq(0,1,len=1000)
+```
+
+**Method 1**: Default `plot` function
+
+```{r fig.width=5, fig.height=3}
+plot(x,f(x),type="l",lwd=3,main="f(x) = x^4 - 1/81")
+abline(0,0,col="red")
+```
+
+**Method 2**: The `qplot` function from the `ggplot2` package
+
+```{r fig.width=5, fig.height=3}
+qplot(x,f(x),geom="line")+
+  geom_hline(yintercept=0,color="red")+
+  ggtitle("f(x) = x^4 - 1/81")
+```
+
+We can also make a scatter plot with points instead:
+```{r fig.width=5, fig.height=3}
+x <- seq(0,1,len=20)
+qplot(x,f(x))+
+  geom_hline(yintercept=0,color="red")+
+  ggtitle("f(x) = x^4 - 1/81")
+```
+
+```{exercise,name="Function Plotting Practice"}
+   
+a. Use `qplot` to make a scatter plot where the x-axis is the iteration number and the y-axis is your vector of errors from Exericse 2b.       
+b. When the errors are very small, it is often easier to see how they are decaying by plotting the logarithm of the error on the y-axis. Do this by adding a `+scale_y_log10()` to your plotting code from part a).  
+
+```
+
+```{r}
+iteration_number <- 1:n
+qplot(iteration_number, errors)
+```
+```{r}
+iteration_number <- 1:n
+qplot(iteration_number, errors) +
+  scale_y_log10()
+```
+
+

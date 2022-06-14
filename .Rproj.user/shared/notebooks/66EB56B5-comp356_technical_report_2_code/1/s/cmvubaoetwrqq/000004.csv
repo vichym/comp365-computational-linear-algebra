@@ -1,0 +1,12 @@
+"0",""
+"0",""
+"0",""
+"0","#  the ranking based on two systems listed by team names"
+"0","ranking = inner_join(eigen_result, colley_result) %>% "
+"0"," inner_join(fte_ranking) %>%"
+"0"," select(-c(eigen_ranking, colley_ranking))"
+"1","[38;5;232mJoining, by = ""names""[39m
+"
+"1","[38;5;232mJoining, by = ""names""[39m
+"
+"0","head(ranking)"

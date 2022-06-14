@@ -1,0 +1,4 @@
+"0","    # Check if you will go broke "
+"0","    P_rearranged.eigen = eigen(t(P_rearranged))"
+"0","    P_rearranged.eigen.value = P_rearranged.eigen$values[1]"
+"0","    P_rearranged.eigen.vectors = P_rearranged.eigen$vector[,1:2]"

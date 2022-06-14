@@ -1,0 +1,5 @@
+"0","kernel.smoother<-function(xj,sigma,xx,yy){"
+"0","# insert your code here and then activate the next chunk"
+"0","  fj <- find.local.line(xj,sigma,xx,yy)"
+"0","  return(fj(xj))"
+"0","}"

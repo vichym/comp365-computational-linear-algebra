@@ -1,0 +1,205 @@
+---
+title: "| Computational Linear Algebra    \n| Technical Report 1 \n"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: yes
+    toc_float: yes
+    toc_depth: 2
+    theme: cerulean
+---
+
+
+***Due: Thursday, March 10, 2022, beginning of class***
+
+***Please upload one file to Moodle per group and bring one hard copy to class***
+
+\
+
+## The Scenario
+
+You have graduated from Macalester and have been hired by the scientific consulting firm CLA365 Inc, specializing in satisfying all of your scientific computation needs. You have been assigned teams of 2-3 people. Please see the group assignments at the bottom. 
+
+The VP has requested that your results be described in a technical report that is not more than 5 pages long (anything beyond 5 pages will be rejected). The 5 pages includes all graphics (like all of us, the VP for Computation enjoys looking at pictures), each of which should have a caption and figure number. You may put `R` code in an Appendix that goes beyond the 5 pages.
+
+Your report should be written in LaTeX. Please let me know if no one in your group is familiar with LaTeX. If there is sufficient interest, I will ask one of the preceptors to organize a tutorial session. I have made a LaTeX template that you can start with [here](https://www.dropbox.com/s/ebx4qp36z78gfbp/TRTemplate.zip?dl=1). It is a  zip file that contains `TRTemplate.tex`, the three PDF image files that are needed, and the final output (`TRTemplate.pdf`). The images were produced in `R` and saved as .pdf's using the Export -> Save as PDF command in the Plots tab in the bottom right panel. This method gives better resolution than taking a screen shot and also makes it easier to adjust the dimensions of the plot.
+
+You are allowed to use other sources outside of class materials, but are certainly not expected to do so.
+
+\
+
+## Topics
+
+You may pick any ***one*** of the following three topics:
+
+### Topic 1: Finite Difference Derivatives
+
+As your first job, the VP for Computation wants you to develop software to compute numerical derivatives in `R`.
+
+#### Specific Design Requests
+
+1. Write a simple `R` function called `D`, which approximates the derivative of a continuous function $f: \mathbb{R} \rightarrow \mathbb{R}$. The function should do the following:   
+- the input should be a function $f$ (you can assume it to be a continuous function)   
+- the output $D(f)$ should be a function that is the derivative of $f$.  That is, inside of `D` you should create a new function, which gives the derivative, and `D` should return that new function.   
+- your function `D` will require the parameter `delta`. It should have a default value of `delta` defined in it, but the user should be able to specify their own `delta` by saying `D(f,delta=.001)`.   
+- For example, the code below should produce the appropriate results.
+
+```{r,eval=FALSE}
+f <- function(x) {x*exp(-x^2)}
+df <- D(f)
+x <- seq(-1,3,length=1000)
+qplot(x,f(x),geom="line") +
+  geom_hline(yintercept=0,color="red")+
+  ggtitle("f(x)")
+qplot(x,df(x),geom="line") +
+  geom_hline(yintercept=0,color="red")+
+  ggtitle("dy/dx = f'(x)")
+```
+
+2. Write a function `Newton(f,x)`, which implements Newton's method on the function $f$ with an initial value $x$ by calling your `D` function instead of needing to know the derivative of $f$. You can assume that a technical report has already been written about Newton's method, so you don't need to describe the method. What you are showing here is that in this improved version of Newton's method, we do not need to know the derivative; rather it is computed using your `D`.
+
+You will need to include stopping criteria as well. I suggest to stop when either (1) a maximum number of iterations is reached (which is always a good idea to have in iterative algorithms), or when the estimate of the root does not change very much from one iteration to the next.
+
+3. The VP for Computation wants to know which values of `delta` are best for these computations.  Can we just set `delta` to 0? As `delta` gets closer and closer to 0 do our computations continue to get better and better or is there a limit to the accuracy. If so, what exactly is the limit and why? You can approach this as follows. Pick a function for which you know the value of the derivative exactly (one possibility is $e^x$ at $x = 0$); compute this derivative with your value of `D` for smaller and smaller values of delta; make a plot. A log plot or a log-log plot can be especially helpful here.
+
+4. Does it matter which finite difference approximation you use for the derivative? For example, you could use the forward difference $\frac{f(x+\delta)-f(x)}{\delta}$, or the three-point centered difference $\frac{f(x+\delta)-f(x-\delta)}{2\delta}$.
+
+
+#### The report
+
+Your report should:   
+- Show the code for `D`   
+- Show the code for Newton's method   
+- Give illustrative examples of each of them   
+- Check what Newton does to the cycling example from class (Figure 1.10 in the book)   
+- Clearly explain your answer to questions #3 and #4 and use graphics as part of your explanation
+
+#### FAQ
+
+- Must we prove that the optimal choice of `delta` is optimal or is it okay to just illustrate it with examples?
+
+*An illustration is fine. No proof necessary.*
+
+- Will the optimal value of `epsilon` depend on the function you use?
+
+*It might. You could explore this.*
+
+- How many examples is enough?
+
+*This is for you to decide. Again we must make choices given the page length.*
+
+- What decimal precision should I use? 
+
+*Up to you. The user should know how to change it as needed.*
+
+\
+
+### Topic 2: Katz Centrality Rankings
+
+Your company, CLA365, has been hired by an outside firm to consult on a computational linear algebra project about network analysis. The Analytics Group at Wikipedia is interested in comparing different ways of ranking the various pages on the Wikipedia site. They have been using Page Rank, and they know about Degree Rank. They are interested in having you implement the Katz Status Index. It is an index developed in the 1950's by Leo Katz to study social networks (he published it in the journal Psychometrica). Implementing and understanding it requires linear algebra knowledge, which is why you have been hired. 
+
+Here are some places where you can learn about it:   
+
+- Some [notes](http://www.macalester.edu/~dshuman1/data/365/Katz.pdf) written up by an intern who worked for Wikipedia in 2015   
+- [The Wikipedia page (!!) on Katz centrality](https://en.wikipedia.org/wiki/Katz_centrality)   
+- A few useful links found by a google search: [link1](http://www.scribd.com/doc/79211179/21/Counting-All-Paths-%E2%80%93-The-Status-Index-of-Katz) | [link2](https://books.google.com/books?id=LCXjxFbN7fcC&pg=PA502&lpg=PA502&dq=%22katz+status+index%22&source=bl&ots=O39_44_pmt&sig=qADTHsr8Onzw4-ydqPktHOlJuw0&hl=en&sa=X&ei=Oc4wUZ6YE-GIygHu2IGQDA#v=onepage&q=%22katz%20status%20index%22&f=false) | [link3](https://books.google.com/books?id=YeXLbClh1SIC&pg=PT85&lpg=PT85&dq=%22katz+status+index%22&source=bl&ots=0Cj1F9GLD2&sig=3Hvd73f9ruI0LPxoImK2wXN7bds&hl=en&sa=X&ei=EdswUfvhNMSbygHtxICADw&ved=0CD4Q6AEwAg#v=onepage&q=%22katz%20status%20index%22&f=false)       
+- [A workplace influence example that uses Katz centrality](http://kops.uni-konstanz.de/bitstream/handle/123456789/5903/Exploratory_Network_Visualization.pdf?sequence=1)
+
+The analytics team would like you to understand and implement the Katz ranking. Throughout the project, you should use sparse matrices, in case the client would like to use any of your code on larger examples.
+
+#### Part 1
+
+They would like you to do the following:   
+
+- As an illustrative example of how this works, implement the workplace influence network example described above in the intern's notes   
+- In this example, they would like to see each step of the Jacobi iteration unfold   
+- They would like to see it for various values of the attenuation factor $\alpha$      
+- They would like to know for which values of the attenuation factor your algorithm converges   
+- They would like an intuitive understanding of the role of alpha and the relation of the Katz index to the in-degree rank   
+- They would like to see you derive the Jacobi iteration from the $Ax=b$ problem and relate the resulting iteration back to the Katz matrix and Katz status index
+
+#### Part 2
+
+They have also provided the Wikipedia data for the top 990 visited sites on Wikipedia. They would like to see it work on this before setting you loose on the entire Wikipedia site. You should perform the analysis on this data for various (convergent) values of the attenuation factor.
+
+Here is the Wikipedia top 990 data set:
+```{r}
+W <- read.csv("http://www.macalester.edu/~dshuman1/data/365/links.1000.csv")
+print(head(W))
+from<-W$from
+to<-W$to
+sites <- sort(union(unique(to),unique(from)))
+n <- length(sites)
+```
+
+Here is some `R` code, written by the aforementioned intern, to set up the adjacency matrix for these 990 sites. It also includes useful functions that convert between the Wiki site index number and the matrix index. The Analytics team would like an explanation of what is going on in these commands.
+
+```{r}
+library(Matrix)
+# The following functions convert between the site labels and the matrix index
+SiteToIndex <- function(s) {match(s,sites)}
+IndexToSite <- function(s) {sites[s]}
+ii <- rep(0,length(to))
+jj <- rep(0,length(from))
+for (i in 1:length(from)) 
+  ii[i] <- SiteToIndex(from[i])
+for (i in 1:length(to)) 
+  jj[i] <- SiteToIndex(to[i])
+xx <- rep(1,length(jj))
+A <- spMatrix(nrow=n,ncol=n,i=ii,j=jj,x=xx)
+```
+
+```{r}
+IndexToSite['9']
+```
+
+
+
+Here is a list of names of the top 990 sites with their site numbers:
+```{r}
+site_names <- read.csv("http://www.macalester.edu/~dshuman1/data/365/titles-sorted-pruned.csv")
+```
+
+
+
+### Topic 3: Open-Ended Linear Systems Alternative
+
+Explore any real world application of iterative methods for solving linear systems of equations (e.g., Jacobi, conjugate gradient). Just make sure to address similar issues as mentioned above in Topic 2 (i.e., illustrative examples, factors affecting convergence, intuitive explanations). The point of the report is not to explain an iterative method in a vacuum, but rather to investigate an iterative method in the context of an actual (preferably scalable) application.
+
+
+\
+
+## Grading Rubric
+
+Here is how the points will be divided for this report:
+
+- 2 points simply for using LaTeX.  Thus if you use something else, you can get a maximum of 23 points.
+- 5 points for your writing: complete sentences, good punctuation, clear concise exposition, good organization, complying with page limit.   
+- 5 points for your examples: clearly and effectively illustrating how the methods work.   
+- 5 points for good graphics that tell a story, have propertly labeled axes, etc.   
+- 8 points for your analyses and insights.  
+
+\
+
+## Groups
+
+If you do not feel comfortable working with any of the assigned team members, please let me know and I will change your group (no reason necessary and no questions asked).
+
+### Section 1: 9:40-11:10AM
+
+- Team 1: Preston Locke, Nathaniel Reimer, Siyuan Yang 
+- Team 2: Ingrid O'Connor, Kevin Tovar, Izzy Valdivia 
+- Team 3: Lily Ewing, David Geeganage, Yijie (Apple) Guo
+- Team 4: Jay Anderson, Katelyn Breen, Hongyi (Tom) Liu 
+- Team 5: Katrina Schoen, Sarah Tannert-Lerner
+- Team 6: Adam Bass, Joe Margolis
+
+### Section 2: 1:20-2:50PM
+
+- Team 7: Connor Bass, Yulin (Joseph) Shao, Carter Swift 
+- Team 8: Jingyi Guan, Jeongyeob Hong, Connie Zhang
+- Team 9: Dan Chang, Zoey Yandell, Chloe Zheng
+- Team 10: Aurora Hiveley, Alpha Ma, Xintan Xia
+- Team 11: Jack Hempel Costello, Ganghe (Andy) Xu, Yifan Wu
+- Team 12: Erik Hager, Ross Kogel, Vichy Meas

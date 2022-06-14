@@ -1,0 +1,312 @@
+---
+title: "| Computational Linear Algebra    \n| Midterm 1: Take-Home Portion \n"
+author: "Vichearith Meas"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: yes
+    toc_float: yes
+    toc_depth: 2
+    theme: cerulean
+    css: style.css
+---
+
+***Due Tuesday, March 1, 2022, 9:00AM sharp. Please submit an html (or pdf) of your completed work on Moodle. If you wish to write things on paper to complement your typed work, you can upload a picture/scan of your work to Moodle.***
+
+The following line sources functions from the class file `365Functions.r`. Feel free to use any of these functions.
+```{r,message=FALSE,warning=FALSE}
+source('https://www.macalester.edu/~dshuman1/365/365Functions.r')
+```
+
+
+```{r include=FALSE}
+library(Matrix)
+library(ggplot2)
+library(tidyverse)
+library(lemon)
+library(knitr)
+knit_print.data.frame <- lemon_print
+```
+
+## Problem 5: Multivariate Rootfinding via Newton's Method
+
+a) Briefly explain why Algorithm 2 is better than Algorithm 1.
+
+::: answer
+
+In Algorithm 2, we solve for $s = DF(x_{k-1})^{-1}F(x_{k-1})$ first. In each iteration, solving for $s$ can be efficient. $s = DF(x_{k-1})^{-1}F(x_{k-1}) \quad \Rightarrow \quad DF(x_{k-1})s = - F(x_{k-1})$. 
+
+Solving this equation is like solving regular $Ax = b$ assuming $DF(x_{k-1}) = A$ and $b = -F(x_{k-1})$. Solving $Ax= b$ is way more efficient than finding $A^{-1}$ and do dot multiplication.  
+:::
+
+
+
+b) Write a function that implements Algorithm 2
+Then test your function example system given in equation (3), with $x_0=(0.5,0.5)$.
+
+::: answer 
+
+```{r}
+
+vnorm <- function(v,p=2) { 
+  if ( p =="I") {
+    return(max(abs(v)))
+  }
+  else {
+    return(sum(abs(v)^p)^(1/p))
+  }
+}
+
+
+mvnewt <- function(F,DF,x0,maxiter=100,tol=1e-8) {
+ #  N: dimention of x 
+  N = length(x0)
+ #  history to save prediction
+  history = spMatrix(N,maxiter + 1)
+  history[,1] = x0          #add first prediction
+  #  record iteration
+  steps=0
+
+  for (j in 2:(maxiter+1)) {
+    steps <- steps+1
+    prevX = history[,(j-1)]
+    s = solve(DF(prevX), -F(prevX))
+    history[,j] = prevX + s
+    if (vnorm(s,2) <= vnorm(prevX,2)*tol) break
+  }
+  return(list(x=history[,(steps+1)],iterations=steps,history = history))
+}
+
+
+```
+
+```{r}
+DF  = function(x){
+  u = x[1]
+  v = x[2]
+  return(matrix(c(-2*u, 1, 2*u , 2*v), nrow = 2, ncol = 2))
+}
+
+F = function(x){
+  u = x[1]
+  v = x[2]
+  return(c(-u^2 + v, u^2 + v^2 - 1))
+}
+
+x0 = c(0.5,0.5)
+mvnewt_estimation = mvnewt(F, DF, x0, tol=1e-30)
+
+mvnewt_estimation$x
+F(mvnewt_estimation$x)
+
+```
+:::
+
+
+
+c) Find the two roots for the system of equations (4).
+
+::: answer
+
+We have:
+
+$$F(u,v,w) =       \begin{pmatrix}
+      u^2 + v^2 + w^2 -4  \\
+       sin(2\pi v)- w  \\
+       u - v^2
+      \end{pmatrix}
+\\
+DF(u,v,w) = \begin{pmatrix}
+      2u & 2v & 2w \\
+       0 & 2\pi cos(2\pi v) & -1 \\
+       1 & -2v & 0 
+      \end{pmatrix}$$
+
+
+```{r}
+Fc = function(x){
+  u = x[1]
+  v = x[2]
+  v2 = v*v
+  w = x[3]
+  return(c(u^2 + v2 + w^2 - 4, sin(2*pi*v) - w , u - v2))
+}
+DFc = function(x){
+  u = x[1]
+  v = x[2]
+  w = x[3]
+  return(matrix(c(
+    2*u, 2*v ,  2*w,
+    0 ,  2*pi*cos(2*pi*v), -1, 
+    1, -2*v, 0
+  ), nrow= 3, ncol= 3 , byrow=TRUE))
+}
+```
+
+```{r}
+initial_guess = list(
+  c(1,1,1),
+  c(-1,1,1),
+  c(0,1,-1),
+  c(2,-1,1), 
+  c(1,2,1),
+  c(-1,2,1),
+  c(-1,1,-2),
+  c(2,0,1), 
+  c(20,10,10),
+  c(-20,-10,-10),
+  c(20,10,-10),
+  c(-20,10,10)
+)
+
+for( i in initial_guess ){
+xc = mvnewt(Fc, DFc, i)
+print(xc$x)
+print(Fc(xc$x))
+}
+
+```
+The estimation for the roots given by the algorithm are $(  1.367119749, -1.169238961, -0.873993046)$ and $( 1.367119749, 1.169238961, 0.873993046)$
+
+
+:::
+
+## Problem 6: Multivariate Rootfinding without a Jacobian Matrix
+
+a) Write a function that implements Algorithm 2
+
+::: answer
+
+```{r}
+mvroot <- function(F,J0,x0,maxiter = 100,tol = 1e-8){
+ #  N: dimention of x 
+  N = length(x0)
+ #  history to save prediction
+  history = spMatrix(N,maxiter + 1)
+  history[,1] = x0          #add first prediction
+  #  record iteration
+  steps=0
+  # delta 
+
+  for (j in 2:(maxiter+1)) {
+    steps <- steps+1
+    prevX = history[,(j-1)]
+    s = solve(J0, -F(prevX))
+    x = prevX + s
+    history[,j] = x
+    t_s = t(s)
+    J0 = J0 + ((F(x) - F(prevX) - J0%*%s)%*%t_s)/(as.vector(t_s%*%s))
+    if (vnorm(s,2) <= vnorm(prevX,2)*tol) break
+  }
+  return(list(x=history[,(steps+1)],iterations=steps,history = history))
+}
+```
+
+:::
+
+Then test your function example system given in equation (3), with $J_0$ equal to the 2x2 identity matrix and $x_0=(0.5,0.5)$
+
+::: answer 
+```{r}
+J0 = diag(1,nrow = 2)
+x0_6 = c(0.5,0.5)
+mvroot_estimation = mvroot(F, J0, x0_6, maxiter = 100)
+mvroot_estimation
+```
+:::
+
+b) Compare the convergence rates for the multivariate Newton method and the Jacobian-free method. Do they converge linearly? superlinearly? quadratically? Support your answer with numerical evidence.
+
+
+::: answer
+
+Solving for exact root: 
+$$
+\begin{cases}
+-u^2 + v = 0 \\
+u^2 + v^2 = 1 
+\end{cases}\Rightarrow 
+v^2 + v -1 = 0 
+\Rightarrow 
+\begin{cases}
+v = \frac{-1+\sqrt{5}}{2}, u =  \sqrt{\frac{-1+\sqrt{5}}{2}} \\
+v = \frac{-1+\sqrt{5}}{2}, u =  - \sqrt{\frac{-1+\sqrt{5}}{2}} \\
+\end{cases}
+$$
+```{r}
+(root_1 = c(-sqrt((- 1 + sqrt(5) )/2 ), (-1 + sqrt(5))/2))
+(root_2 = c(sqrt((- 1 + sqrt(5) )/2 ), (-1 + sqrt(5))/2))
+
+```
+Both of the multivariate Newton method and the Jacobian-free method converge linearly. First, I find the 2-norm distance between the prediction given by each method and the actual root. Then I compute the error ratio $\frac{|e_{k+1}|}{|e_k|^q}$ for  $q \in \{1, 1.5, 2\}$ and then plot the graph. 
+
+The plot show that for both method to be linearly converge. 
+
+```{r message=FALSE, warning=FALSE}
+# mvnewt_estimation$history
+mvnewt_errors = rep(0, ncol(mvnewt_estimation$history)) 
+for (i in 1:ncol(mvnewt_estimation$history)){
+  mvnewt_errors[i] = vnorm(mvnewt_estimation$history[,i] - root_2,p = 2)
+}
+
+mvroot_errors = rep(0, ncol(mvroot_estimation$history)) 
+for (i in 1:ncol(mvroot_estimation$history)){
+  mvroot_errors[i] = vnorm(mvroot_estimation$history[,i] - root_1,p = 2)
+}
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+mvn_q = data.frame(x = 1:34, 
+                   linear = mvnewt_errors[2:35]/mvnewt_errors[1:34],
+                   superlinear = mvnewt_errors[2:35]/(mvnewt_errors[1:34]^1.5),
+                  quadratic = mvnewt_errors[2:35]/(mvnewt_errors[1:34]^2))
+
+mvr_q =  data.frame(x= 1:15, 
+                    linear = mvroot_errors[2:16]/mvroot_errors[1:15],
+                   superlinear = mvroot_errors[2:16]/(mvroot_errors[1:15]^1.5),
+                    quadratic = mvroot_errors[2:16]/(mvroot_errors[1:15]^2))
+mvr_q
+
+mvn_q
+
+ggplot(mvn_q, aes(x = x)) + 
+  geom_line(aes(y = linear, colour = "Linear")) + 
+  geom_line(aes(y = quadratic, colour = "Quadratic"))+
+  geom_line(aes(y = superlinear, colour = "Super Linear"))  + 
+  labs(title= 'Error Ratio of Multivariate Rootfinding via Newton’s Method', 
+       x = 'Iteration')  + 
+  theme(axis.title.x = element_text("Iteration"), 
+        axis.title.y = element_text("Error Ratio"))
+ggplot(mvr_q, aes(x = x)) + 
+  geom_line(aes(y = linear, colour = "Linear")) + 
+  geom_line(aes(y = quadratic, colour = "Quadratic"))+
+  geom_line(aes(y = superlinear, colour = "Super Linear"))  + 
+  labs(title= 'Error Ratio of Multivariate Rootfinding without a Jacobian Matrix', 
+       x = 'Iteration') + 
+  theme(axis.title.x = element_text("Iteration"), 
+        axis.title.y = element_text("Error Ratio"))
+
+```
+
+
+However, even though they are both linearly converge, for this particular initial value $x_0$, the  `mvnewt` seems to converge faster than `mvroot`. 
+
+```{r message=FALSE, warning=FALSE}
+mvnewt_errors =  data.frame(mvnewt_errors, x = 1:101)
+
+mvnewt_errors %>% 
+  ggplot() + 
+  geom_line(aes(x = x, y = mvnewt_errors ))
+
+mvroot_errors = data.frame(mvroot_errors, x = 1:101)
+mvroot_errors %>% 
+  ggplot() + 
+  geom_line(aes(x = x, y = mvroot_errors))
+```
+
+:::
+
+

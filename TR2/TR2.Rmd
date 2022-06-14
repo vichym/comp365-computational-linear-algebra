@@ -1,0 +1,91 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(janitor)
+library(tidyverse)
+source("https://www.macalester.edu/~dshuman1/365/365Functions.r")
+```
+
+
+```{r}
+data <- as.data.frame(read.csv('nhl2122.csv')) %>%
+    clean_names() %>% 
+    rename(visitor_score = g, home_score = g_1) %>% 
+    select(-c(x, att, log, notes, date))
+# team vector for index sorted in aphabetically order
+teams <- sort(union(unique(data$visitor), unique(data$home)))
+
+```
+```{r}
+data_summary = data %>% summarise(
+    win = ifelse(visitor_score > home_score, visitor, home), 
+    lose = ifelse(visitor_score < home_score, visitor, home), 
+    score = abs(visitor_score - home_score))%>% 
+    pivot_longer(cols=c(win, lose), values_to = 'names', names_to = 'result') %>%
+    mutate(result = as.factor(result))%>% 
+    group_by(names, result) %>% 
+    summarise(diff_by_total = sum(score), count = n()) %>% 
+    pivot_wider(
+        id_cols = names,
+     names_from = result,
+  values_from = c(diff_by_total, count)) %>% 
+  mutate( balance_score = diff_by_total_win - diff_by_total_lose, 
+          total_game_count = sum(count_lose, count_win)) %>% 
+arrange(names)
+```
+
+
+
+```{r}
+# calculate score
+data_sum = data %>%
+   group_by(visitor, home) %>%                                          # group to collapse the multiple games by (visitor vs home)
+   summarize(visitor_score = sum(visitor_score) , home_score = sum(home_score))     # sum to between  multiple games by (visitor vs home)
+# # calculate score
+# data_sum = data %>% mutate(
+#   s_visitor = visitor_score/(visitor_score + home_score),  # calculate s_ij
+#                 s_home = home_score/(visitor_score + home_score)) %>%     # calculate s_ji
+#    group_by(visitor, home) %>%                                            # group to collapse the multiple games by (visitor vs home)
+#    summarize(s_visitor = sum(s_visitor) , s_home = sum(s_home)) %>%      # sum to between  multiple games by (visitor vs home)
+#    mutate(s_visitor = s_visitor/(s_visitor + s_home) , s_home = s_home/(s_visitor + s_home)) # get the a new ration from all multiple games
+
+```
+
+```{r}
+INDEXOF = function ( s ) {match(s, teams)}
+
+#  score between team in (HOME vs VISITOR) and (VISITOR vs HOME)
+team_score = matrix(0, nrow= length(teams), ncol= length(teams))
+for(i in 1:nrow(data_sum)){
+  visitor_index = INDEXOF(data_sum$visitor[i])
+  home_index = INDEXOF(data_sum$home[i])
+  team_score[visitor_index, home_index] =  team_score[visitor_index, home_index] + data_sum$visitor_score[i]
+  team_score[home_index, visitor_index] =  team_score[home_index, visitor_index] + data_sum$home_score[i]
+}
+#  Total Score between team combine
+total_score = t(team_score) + team_score + diag(1,nrow = length(teams))
+
+A =  team_score/total_score
+options(digits=1)
+A[32,]
+```
+
+```{r}
+A.eigen = eigen(A)
+A.lambda = as.numeric(A.eigen$values[1])
+A.eigenvector =as.numeric( A.eigen$vectors[,1])
+```
+```{r}
+eigen_result =  data.frame(colley_ranking = as.matrix(A.eigenvector)) %>%
+  mutate(names = data_summary$names)
+```
+
+

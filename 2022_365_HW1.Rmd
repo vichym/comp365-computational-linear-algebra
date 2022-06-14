@@ -1,0 +1,684 @@
+---
+title: "| Computational Linear Algebra    \n| Homework 1: Programming Practice and Root Finding \n"
+author: "Vichearith Meas"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    theme: cerulean
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+```{r include=FALSE}
+knitr::opts_chunk$set(
+ message=FALSE,
+  echo = TRUE, fig.width = 10
+)
+```
+***Due Monday, January 31, 2021, 11:59PM. Please submit an html of your
+completed work on Moodle***
+
+Reminder: you are allowed --- and in fact encouraged --- to work on and
+discuss homework together. You should, however, write up your own
+assignments in your own words. If you work with another person or if you
+get significant help from a classmate or external resource, you should
+give that person or resource credit in your solution (at no penalty to
+you).
+
+```{r,echo=FALSE,message=FALSE}
+library(ggplot2)
+library(Matrix)
+library(egg)
+    
+```
+
+# Part I: Programming Practice
+
+## Problem 1: A Sum
+
+Write a program called *mytrisum* to calculate the sum of the first $n$
+numbers in the progression $2,5,8,11,\cdots$. As an example, mytrisum(3)
+should return 15 and mytrisum(42) should return the value of
+$$\sum_{n=1}^{42} (3n-1).$$\
+Illustrate your program by calling mytrisum(102030).
+
+There is neither a bonus nor a penalty for really fast or slow code. I
+suggest writing multiple versions of the program using different
+strategies. Here are three ideas: use a for-loop, use sum(v) after
+building the right v, or work out the sum on paper so that your program
+can be really simple.
+
+```{r Answer_1}
+
+# 'For loop'
+mytrisum_for = function(x){
+  sum = 0
+  for(i in 1:x){
+    sum =sum + 3*i - 1
+  }
+  return(sum)
+}
+mytrisum_for(3) # 15
+mytrisum_for(42)#2667
+mytrisum_for(102030) # 15615232365
+
+
+# 'Vector'
+mytrisum_vector = function(x){
+  v = c(1:x)
+  v = 3*v - 1
+  return(sum(v))
+}
+mytrisum_vector(3) # 15
+mytrisum_vector(42)#2667
+mytrisum_vector(102030) # 15615232365
+
+# 'Formula'
+mytrisum_formula = function(x){
+  return((3*x^2 + x)/2)
+}
+mytrisum_formula(3) # 15
+mytrisum_formula(42)#2667
+mytrisum_formula(102030) # 15615232365
+```
+
+\
+
+## Problem 2: Office Space
+
+The point of this problem is twofold: (i) to illustrate what can happen
+if you accumulate many truncations of numbers and (ii) to give you
+practice writing programs.
+
+In the 1999 movie Office Space, a character creates a program that takes
+fractions of cents that are truncated in a bank's transactions and
+deposits them into his own account. This is not a new idea, and hackers
+who have actually attempted it have been arrested. In this exercise you
+will simulate the program to determine how long it would take to become
+a millionaire this way.
+
+Assume the following details:
+
+-   You have access to 10,000 bank accounts
+
+-   Initially, the bank accounts have values that are uniformly
+    distributed between \$100 and \$100,000
+
+-   The nominal annual interest rate on the accounts is 5%
+
+-   The daily interest rate is thus .05/365
+
+-   Interested is compounded each day and added to the accounts, except
+    that fractions of a cent are truncated
+
+-   The truncated fractions are deposited into an illegal account that
+    initially has a balance of \$0
+
+-   The illegal account can hold fractional values and it also accrues
+    daily interest
+
+Your job is to write an R script that simulates this situation and finds
+how long it takes for the illegal account to reach a million dollars.
+
+------------------------------------------------------------------------
+
+Here is some R help:
+
+The following code generates the initial accounts:
+
+```{r}
+accounts <- runif(10000,100,100000)
+accounts <- floor(accounts*100)/100
+
+```
+
+The first line sets up 10,000 accounts with values uniformly between 100
+and 100,000 The second line removes the fractions of cents (look at the
+data before and after that line is applied). To calculate interest for
+one day:
+
+```{r}
+interest <- accounts*(.05/365)
+# head(interest)
+```
+
+Depending on how you do it, you might want to use an if-then statement.
+For example, you might use something like
+
+    if (illegal > 1000000) break
+
+The `break` command breaks out of a loop. Or, perhaps more elegantly,
+you might use a `while` loop
+
+    while (illegal < 1000000) { do stuff here }
+
+```{r Answer_2_Helper_Functions}
+
+#  FUNCTION: take original account, calculate the sum of illegal money after truncated
+get_truncated_sum = function(original_accounts){
+  #  Account balance after truncations 
+  truncated_accounts = floor(original_accounts*100)/100
+  #  Return illegal money gain
+  return(sum(original_accounts - truncated_accounts))
+}
+
+# FUNCTION: take accounts and return final balance after adding interest
+add_compound_interest = function(accounts, interest_rate){
+  return(accounts*(1 + interest_rate))
+}
+
+# FUNCTION: return the update balance in one iteration
+accumulate_money = function(target_accounts, balance, rate){
+  # Compound interest
+  target_accounts  = add_compound_interest(target_accounts,rate)
+  balance = add_compound_interest(balance,rate)
+  # Add earning 
+  balance = balance +  get_truncated_sum(target_accounts)
+  return(balance)
+}
+
+```
+
+```{r Answer_2_Main_Functions, echo=TRUE}
+
+# MAIN FUNCTION: Simulate the situation and finds how many day it takes for the illegal account to reach a million dollars
+
+simulate = function(){
+  
+  INTEREST_RATE = 0.5/356
+  my_account = 0
+  day_count = 0
+  
+  while(my_account < 1000000){
+      my_account = accumulate_money(accounts, my_account, INTEREST_RATE)
+      day_count = day_count + 1
+  }
+  cat('Final Day Count : ', day_count, ' days or ', round(day_count/365,2 ),'years' , end='\n')
+  cat('Illegal Account Balance : $', my_account)
+}
+
+simulate()
+
+```
+
+## Problem 3: Arithmetic-Geometric Mean
+
+The arithmetic mean of $a$ and $b$ is $\frac{a+b}{2}$. The geometric
+mean of two positive numbers $a$ and $b$ is $\sqrt{ab}$.\
+To compute the *arithmetic-geometric mean* of two positive numbers, do
+the following. First, compute their arithmetic and geometric means and
+call these numbers $A$ and $G$. Then compute the arithmetic and
+geometric means of $A$ and $G$ and overwrite the old values of $A$ and
+$G$ with these new ones. Repeat this for a while and you will find that
+$A$ and $G$ get closer and closer together. Eventually they will look
+identical. The number that they converge to is called the
+arithmetic-geometric mean of the two original numbers.
+
+a)  Write a function called "my.agm" that computes the
+    arithmetic-geometric mean of two input numbers. Test it by finding
+    the agm of these pairs of numbers: $(10,50)$; $(1,100)$;
+    $(10^{-10}, 10^{10})$. You can do this by correcting the following
+    code chunk:
+
+    ```{r Answer_3_a}
+    my.agm <- function(a,b){
+      # add your code here to find the agm of the inputs "a" and "b"
+      # You'll probably need a for-loop or a while-loop
+      # suppose your answer is stored as "C"
+      A = (a + b)/2
+      G = sqrt(a*b)
+      tol = 10^-13
+      
+      while (abs(A-G) > tol){
+        AA = (A + G)/2
+        GG = sqrt(A*G)
+        A = AA
+        G = GG
+        }
+      
+      C = G 
+      return(C)
+    }
+
+    print(my.agm(10,50))
+    print(my.agm(1,100))
+    print(my.agm(1e-10,1e10))
+    ```
+
+b)  Define $f(x)$ as the arithmetic-geometric mean of $2$ and $x$. Make
+    a plot showing $f(x)$ for $x \in [1,10]$ (e.g., use 900 $x$ values
+    evenly spaced in this interval). You may want to use a for-loop to
+    find the values of $f(x) = agm(2,x)$ for each value of $x$.
+
+    ```{r Answer_3_b}
+    library(ggplot2)
+
+    ### Function f(x) as the arithmetic-geometric mean of $2$ and $x$
+    f = function(x){
+      return(my.agm(2,x))
+    }
+
+    ### Plotting: calculate interval 1:x and plot f(x)
+    plot_f = function(x){
+      #  create 900 points between 0:x interval
+      result = data.frame(x = seq(from = 0, to = x, length.out = 900), y = 0)
+      #  loop through each point to get value of f(x)
+      for (i in 1:nrow(result)){
+        result[i,2] = f(result[i,1])
+      }
+      #  plot the value
+      qplot( result[,1], 
+             result[,2],
+             ylab = "AGM between 2 and x", 
+             xlab = 'x', 
+             
+             )+
+      ggtitle("Arithmetic and Geometric Means " )+
+        labs(subtitle = paste0('For x between 0 to ',x))
+    }
+
+    # plot_f2 = function(x){
+    #   #  create 900 points between 0:x interval
+    #   x = seq(from = 0, to = x, length.out = 900)
+    #   #  plot the value
+    #   qplot( x,
+    #          f(x),
+    #          ylab = "AGM between 2 and x",
+    #          xlab = 'x'
+    #          )+
+    #   ggtitle("Arithmetic and Geometric Means")
+    # }
+
+
+    plot_f(25)
+    plot_f(10)
+    plot_f(5)
+
+
+    ```
+
+c)  Somehow, find an estimate of the derivative $f'$ at $x=5$, that is,
+    find the slope of the tangent line to the graph you just made at
+    $x=5$. One way is to use find the slope of a line that passes
+    through two nearby points on the graph, such as
+
+    $$f'(5) \approx \frac{f(5+h) - f(a)}{h}$$ or, more symmetrically,
+
+    $$f'(5) \approx \frac{f(5+h) - f(5-h)}{2h}$$
+
+    where $h$ is some pretty small but nonzero number.
+
+    ```{r Answer_3_c}
+    derivative <- function(f,x,tol=0.5*10^-15,max.its=60){
+      history <- rep(NA, max.its)
+      h = x
+      result = (f(x + h) - f(x - h))/2*h
+      for( i in 1:max.its){
+        history[i] = result
+        if(h <= tol){
+          break
+        }
+        
+        h = h/2
+        result = (f(x + h) - f(x - h))/(2*h)
+        }
+      return(list(estimate = result,history = history))
+    }
+
+    derivative(f, 5)
+    derivative(f, 2.5)$estimate
+    derivative(f, 1)$estimate
+    derivative(f, 0.2)$estimate
+    derivative(f, 0.1)$estimate
+    derivative(f, 0.05)$estimate
+    derivative(f, 0.025)$estimate
+    derivative(f, 0.0125)$estimate
+
+    ```
+
+d)  Amazingly, the difficult "elliptic" integral
+    $$ I = \int_0^{\pi/2} \frac{1}{\sqrt{1-0.98\sin^2 t}}\,dt $$ can be evaluated using the arithmetic-geometric mean. In fact, $$I = \frac{\pi}{2\cdot agm(1,\sqrt{0.02})}.$$ Find the value of this integral using the function you wrote.
+
+    ```{r Answer_3_d}
+
+pi/(2*my.agm(1, sqrt(0.02)))
+
+    ```
+
+# Part II: Root Finding
+
+## Problem 4: Bisection Method Example
+
+***Note: This is Computer Problem 7 from Section 1.1 of Sauer***
+
+Use the Bisection Method to find the two real numbers $x$, within six
+correct decimal places that make the determinant of the matrix
+
+$$A=\left[ \begin{matrix} 1 & 2 & 3 & x \\ 4 & 5 & x & 6 \\ 7 & x & 8 & 9 \\ x & 10 & 11 & 12 \end{matrix} \right] $$
+
+equal to 1000. For each solution you find, test it by computing the
+corresponding determinant and reporting how many correct decimal places
+the determinant has when your solution is used.
+
+**Hints:**
+
+-   To bind rows together into a matrix:
+
+```{r}
+rbind(c(1,2,3,44),c(4,5,44,6),c(7,44,8,9),c(44,10,11,12)) 
+```
+
+-   If `A` is a matrix, then `det(A)` is its determinant\
+
+-   Make a function of `x` that puts `x` on the backward diagonal,
+    computes its determinant, and subtracts 1000. Then use your `bisect`
+    on this function.
+
+    ```{r}
+    bisect <- function(f,interval,tol=0.5*10^-12,max.its=40){
+      history <- rep(NA, max.its) 
+      a =  interval[1]
+      b =  interval[2]
+      if (f(a)*f(b) > 0){
+        return('f(a) and f(b) have the same sign')
+      }
+
+      count = 0
+      for( i in 1:max.its){
+        count = i
+        if ((b-a)/2 > tol ){
+          c = (a+b)/2
+          history[i] <- c
+          
+          if(f(c) == 0){
+            root = c
+            break
+          }
+          
+          if(f(a)*f(c) < 0){
+            b = c
+          }else{
+            a = c
+          }
+        }else{
+          break
+        }
+      }
+      root <- c
+      
+      return(list(root=root,history=history[!is.na(history)], iteration = count))
+    }
+    ```
+
+    ```{r}
+    # x = 9.7082991
+    x = 9.7082991
+    find_A_determinant = function(x){
+      matrix = rbind(c(1,2,3,x),c(4,5,x,6),c(7,x,8,9),c(x,10,11,12))
+      return(det(matrix) - 1000)
+    }
+
+    find_x = function(){
+      intervals = rbind(c(-50, 50), c(-10,0), c(-10,10), c(0,10), c(-100,100))
+      for (i in 1:nrow(intervals)){
+        cat('\nInterval: ', intervals[i,], 'result: ', end= '\n\t')
+        print(bisect(find_A_determinant, intervals[i,], max.its = 90, tol = 0.5*10^-8))
+      }
+    }
+    options(digits = 8)
+    find_x()
+    ```
+
+\
+
+## Problem 5: Bisection Method vs. Newton's Method
+
+The function
+
+$$f(x)=(cos(x))^2+sin(x)-1$$
+
+has roots at both $\pi$ and $\pi/2$.
+    
+
+a)  Using the convergence properties we discussed in class, estimate how
+    many iterations of the bisection method are necessary to find the
+    accurate solution to **eight correct decimal places**, when we start
+    with a bracketing interval of [2.5,3.5].
+
+    <div style="background: #d0d0d0; padding:1em">
+    After $i$ steps of the algorithm, solution error is $$
+    e_i \leq \frac{(b-a)}{2^{i+1}}
+    $$
+
+    To find the accurate solution to **eight correct decimal places**, it is  to find $i$ which $e^i = 10^{-8}$ Therefore,
+
+    $$ 
+    \begin{align*}
+        0.5*10^{-8} &\leq \frac{(3.5-2.5)}{2^{i+1}} \quad ; \quad \text{given } \quad a = 2.5, b= 3.5 \\
+         2^{i+1} &\leq \frac{1}{ 0.5*10^{-8}}\\
+         2^{i+1} &\leq  2(10^{8})\\
+         2^i     &\leq  10^{8} \\
+         i     &\leq  8 log_2(5*2) \\
+         i     &\leq  8(1 + log_2(5)) \\
+         i     &\leq  26.57542
+    \end{align*} 
+    $$
+    <div>
+
+b)  Use your `bisect` function to see how many iterations it actually
+    takes.
+
+    ```{r}
+    f_cos_sin = function(x){
+      return((cos(x))^2 + sin(x) - 1)
+    }
+
+    f_cos_sin(2.5)
+    f_cos_sin(3.5)
+    
+    x = seq(from = 0, to=2*pi, length.out= 1000)
+    qplot(x, f_cos_sin(x), geom=c('line')) + 
+      geom_hline(yintercept = 0, color = 'red') 
+    
+    
+      
+    ```
+
+    ```{r}
+    bisect2 <- function(f,interval, answer, digit=8){
+      tol= 0.5*10^(-digit)
+      a =  interval[1]
+      b =  interval[2]
+      if (f(a)*f(b) > 0){
+        return('f(a) and f(b) have the same sign')
+      }
+
+      count = 0
+      c = (a+b)/2
+      while(abs(answer - c)> tol){
+          count = count + 1
+          c = (a+b)/2
+          if(f(a)*f(c) < 0){
+            b = c
+          }else{
+            a = c
+          }
+      }
+      root <- c
+      
+      cat("\tRoot:", formatC(root, format='f', digits=15 ), '\tAcc Digit: ', digit, "\tIteration: ", count, end='\n')
+    }
+
+
+    cat(' Actual Root:', formatC(pi, format='f', digits=15 ), end='\n\n')
+    for (i in 1:15){
+      bisect2(f_cos_sin, c(2.5,3.5), pi,i)
+    }
+
+    ```
+
+c)  By hand, compute a formula for Newton's iteration for this
+    particular choice of $f(x)$; i.e., write a formula for $x_{i+1}$ in
+    terms of $x_{i}$.
+
+     <div style="background: #d0d0d0; padding:1em">
+
+    $$
+    f(x) = cos^2(x) + sin(x) -1 \\f'(x) = -sin(2x) + cos(x) \\
+    $$
+    
+    Tangent line $y$ at $x_0$: $$
+    \begin{align*} 
+    y &=f'(x_0)(x-x_0) + f(x_0) \\
+    0 &= f'(x_0)(x-x_0) + f(x_0) \\
+    x_1 &= x_0 - \frac{f(x_0)}{f'(x_0)} \\
+    x_{i+1} &= x_i - \frac{f(x_i)}{f'(x_i)} \\
+    x_{i+1} &= x_i - \frac{cos^2(x_i) + sin(x_i) -1 }{-sin(2x_i) + cos(x_i)}\\
+    x_{i+1} &= x_i - \frac{cos^2(x_i) + sin(x_i) -cos^2(x_i) - sin^2(x_i) }{-2sin(x_i)cos(x_i) + cos(x_i)}\\
+    x_{i+1} &= x_i - \frac{sin(x_i)(1-sin(x_i))}{cos(x_i)(1 -2sin(x_i))}\\
+    x_{i+1} &= x_i - tan(x_i)\frac{1-sin(x_i)}{1 -2sin(x_i)}\\
+    \end{align*}
+    $$
+
+    </div>
+
+d)  Set $x_0$ to 4.25, run 50 iterations of your Newton's formula from
+
+    c)  to compute $\{x_i\}_{i=0,1,\ldots,50}$, and compute
+        $e_i=|x_i-\pi|$ for all $i$. When does the iteration converge?
+        Now plot $e_i / e_{i-1}$ over all $i$ until convergence. What is
+        the convergence rate to $\pi$? **Note**: You do not have to
+        write a general Newton's function; just implement the specific
+        iteration you calculated in part c).
+
+    ```{r}
+    #  Function: take x0 and return the x1
+    f_Newton_iteration = function(x_i){
+      return(x_i - tan(x_i)*(1-sin(x_i))/(1-2*sin(x_i)))
+    }
+    
+    # Function: return the dataframe about convergence rate  
+    calculate_convergence = function(f, root, x_0, iter = 50, q = 1){
+        #  Placeholder for {x_i} values
+        x = rep(0, iter)
+        #  Placeholder for {e_i} values
+        e = rep(NA, iter)
+        # Calculate x1 given x0 = 4.25
+        x[1] = f(x_0)
+        for(i in 2:iter){
+          x[i] = f_Newton_iteration(x[i-1])
+          e[i-1] = abs(x[i] - root)
+        }
+       ratio = e[2:iter]/(e[1:iter-1]^q)
+       convergence_length = length(ratio[!is.na(ratio)])
+       
+       result = data.frame(iteration=1:(convergence_length),
+                            err_ratio= ratio[1:convergence_length],
+                           errors = e[1:convergence_length], 
+                           x = x[1:convergence_length])
+     
+    return(result)
+    }
+    
+    
+    ```
+    
+    
+    <div style="background: #d0d0d0; padding:1em">
+    
+    The Sequence of approximations converges with rate
+    $q$ if $$lim_{i\to \infty}\frac{\|e_{i+1}\|}{\|e_i\|^q} = C $$
+    
+    The iteration converge on the fifth iteration.  
+    The convergent rate to $\pi$ is quadratic according to the graph below. The error ratio in the third graph is almost consistant starting from iteration 1. 
+    
+    </div>
+    
+
+    ```{r}
+    ratio1 = calculate_convergence(f_Newton_iteration, pi, 4.25, 50, q = 1)
+    ratio1.8 = calculate_convergence(f_Newton_iteration, pi, 4.25, 50, q = 1.8)
+    ratio2 = calculate_convergence(f_Newton_iteration, pi, 4.25, 50, q = 2)
+    head(ratio1)
+    p1  = qplot(ratio1$iteration,
+              ratio1$err_ratio, 
+              geom = c('path', 'point'),
+              ylab='Error Ratio',
+              xlab = 'Iteration') +
+              ggtitle(' Error Ratio vs Iteration for q = 1') + 
+          labs(subtitle = 'Iteration starts from 4.25 ')
+    p1.8  = qplot(ratio1.8$iteration,
+              ratio1.8$err_ratio, 
+              geom = c('path', 'point'),
+              ylab='Error Ratio',
+              xlab = 'Iteration') +
+              ggtitle('Error Ratio vs Iteration for q = 1.8') + 
+          labs(subtitle = 'Iteration starts from 4.25 ')
+    p2  = qplot(ratio2$iteration,
+              ratio2$err_ratio, 
+              geom = c('path', 'point'),
+              ylab='Error Ratio',
+              xlab = 'Iteration') +
+              ggtitle('Error Ratio vs Iteration for q = 2') + 
+          labs(subtitle = 'Iteration starts from 4.25 ')
+    
+    
+    
+    ggarrange(p1,p1.8,p2, nrow=3)
+    ```
+
+e)  Repeat d) with $x_0$=1.5. What is the convergence rate to $\pi/2$? If your answer is different from d), explain why.
+
+    <div style="background: #d0d0d0; padding:1em">
+    
+    The convergence rate to $\pi/2$ is linear. In d), the error eventually reach 0 making $\frac{e_i}{e_{i-1}}$ drop to 0. In this e), the error drops at a constant rate around 0.5 before a drop and jump to 1. The $\frac{e_i}{e_{i-1}} = 1$ after iteration 22. After this iteration, the error remains the same at 0.00000000082858431 and making $\frac{e_i}{e_{i-1}} = 1$. 
+    
+    Look at the plot of $f(x)$, the starting point at $x_0 = 1.5$ is very flat, meaning the Newton Convergence at this point very slow.
+    </div>
+    
+    
+  
+    ```{r}
+    ratio1_1.5 = calculate_convergence(f_Newton_iteration, pi/2, 1.5, 50, q = 1)
+    ratio1.8_1.5 = calculate_convergence(f_Newton_iteration, pi/2, 1.5, 50, q = 1.8)
+    ratio2_1.5 = calculate_convergence(f_Newton_iteration, pi/2, 1.5, 50, q = 2)
+    p1.5_1 = qplot(ratio1_1.5$iteration,
+          ratio1_1.5$err_ratio, 
+          geom = c('path', 'point'),
+          ylab='Error Ratio',
+          xlab = 'Iteration') +
+          ggtitle('Error Ratio vs Iteration') + 
+        labs(subtitle = 'Iteration starts from 1.5 ')
+    p1.5_1.8 = qplot(ratio1.8_1.5$iteration,
+          ratio1.8_1.5$err_ratio, 
+          geom = c('path', 'point'),
+          ylab='Error Ratio',
+          xlab = 'Iteration') +
+          ggtitle('Error Ratio vs Iteration') + 
+        labs(subtitle = 'Iteration starts from 1.5 ')
+    p1.5_2 = qplot(ratio2_1.5$iteration,
+          ratio2_1.5$err_ratio, 
+          geom = c('path', 'point'),
+          ylab='Error Ratio',
+          xlab = 'Iteration') +
+          ggtitle('Error Ratio vs Iteration') + 
+        labs(subtitle = 'Iteration starts from 1.5 ')
+  ggarrange(p1.5_1, p1.5_1.8, p1.5_2, nrow = 3 )
+
+      qplot(x, f_cos_sin(x), geom=c('line')) + 
+        geom_hline(yintercept = 0, color = 'red') + 
+        geom_vline(xintercept = 1.5, color = 'blue',linetype = "dashed") + 
+        geom_vline(xintercept = 4.25, color = 'green', linetype = "dashed") + 
+        geom_point(aes(x=1.5, y=0), colour="blue") + 
+        geom_text(aes(x=1.5,y=-0.15), label='x0 = 1.5', colour='blue')+
+        geom_point(aes(x=4.25, y=0), colour="green") + 
+        geom_text(aes(x=4.25,y=-0.15), label='x0 = 4.25', colour='green')
+      
+      
+      ratio1_1.5
+    
+    ```

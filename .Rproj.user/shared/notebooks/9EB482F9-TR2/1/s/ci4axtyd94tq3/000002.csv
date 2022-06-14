@@ -1,0 +1,18 @@
+"0","data_summary = data %>% summarise("
+"0","    win = ifelse(visitor_score > home_score, visitor, home), "
+"0","    lose = ifelse(visitor_score < home_score, visitor, home), "
+"0","    score = abs(visitor_score - home_score))%>% "
+"0","    pivot_longer(cols=c(win, lose), values_to = 'names', names_to = 'result') %>%"
+"0","    mutate(result = as.factor(result))%>% "
+"0","    group_by(names, result) %>% "
+"0","    summarise(diff_by_total = sum(score), count = n()) %>% "
+"0","    pivot_wider("
+"0","        id_cols = names,"
+"0","     names_from = result,"
+"0","  values_from = c(diff_by_total, count)) %>% "
+"0","  mutate( balance_score = diff_by_total_win - diff_by_total_lose, "
+"0","          total_game_count = sum(count_lose, count_win)) %>% "
+"0","arrange(names)"
+"1","[38;5;232m`summarise()` has grouped output by 'names'. You can override using the
+`.groups` argument.[39m
+"

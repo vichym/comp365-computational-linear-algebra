@@ -1,0 +1,36 @@
+---
+title: "E2_practice"
+author: "Vichearith Meas"
+date: "4/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(Matrix)
+```
+
+```{r}
+#  problem 1
+p = c(12,-10,3, -2)
+q = c(0,2,8,-8)
+s = c(9.62, 12.5,6.52, 10.50)
+
+d = sqrt(p^2 + q^2)
+
+b = d - s
+A = cbind(p/d, q/d)
+
+position = solve(t(A)%*%A, t(A)%*%b)
+position
+```
+```{r}
+# problem 2
+
+
+
+
+```
+

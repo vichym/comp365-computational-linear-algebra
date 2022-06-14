@@ -1,0 +1,175 @@
+---
+title: "| Computational Linear Algebra    \n| Activity 7: Conditioning \n"
+author: "INSERT STUDENT NAME HERE"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    theme: cerulean
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+## Question 1: Is the problem of computing eigenvalues well-conditioned or ill-conditioned?
+
+Compute by hand the eigenvalues of the matrices
+$$A=\begin{bmatrix} 1 & 1000 \\ 0 & 1\end{bmatrix}~\hbox{  and  } ~\tilde{A}=\begin{bmatrix} 1 & 1000 \\ 0.001 & 1\end{bmatrix}.$$
+Would you say that the problem of computing eigenvalues (for
+nonsymmetric matrices) is well-conditioned or **ill-conditioned**?
+
+> $Eigen(A) = 1$, $Eigen(A') = 2$ . small change in input leads to big
+> change in output (eigenvalues)\
+
+## Question 2: Improving the conditioning of the computation of a vector norm
+
+Let
+$x = \left[ \begin{array}{c} 1000 \\ 3*10^{154} \\ 5 \\ 4*10^{154} \\ 10^{100} \\ 1 \end{array} \right].$
+
+a)  Compute the length of the vector $x$ using
+    $||x|| = \sqrt{ x_1^2 + x_2^2 + \cdots + x_n^2}$. Report what
+    happens. Can you explain why?
+    
+    
+    The problem is the when we square the component inside the square root, the result is overfloat since computer have 11 bits to store both positive and neg exponents and reserve all 1-11bit for inf. This make the largest number represent by 64 bit to be $2^{1024-1} $ which is $10^{307}$
+
+    ```{r}
+
+    sqrt(1000 + (3*10^154)^2 + 25 + (4*10^154)^2 + 10^1000 + 1 )
+    2^1023
+    (10^154)^2
+    ```
+
+b)  Can you circumvent this issue somehow in order to calculate $||x||$?
+
+Scaale down and scale back up. 
+
+$$
+ ||x|| = \sqrt{ x_1^2 + x_2^2 + \cdots + x_n^2} \\
+ ||x|| = \sqrt{ 1000^2 + ( 3*10^{154})^2 + 5^2 + (4*10^{154})^2 + (10^{100})^2 + 1  } \approx  \sqrt{  ( 3*10^{154})^2 + (4*10^{154})^2  }\\
+
+$$
+
+\
+
+## Question 3: The ill-conditioned Vandermonde matrix and a heuristic for estimating the accuracy of the solution of a system of equations from the condition number of $A$
+
+Given a column vector
+$x=\begin{bmatrix} x_1 \\ x_2 \\  x_3\\ \vdots \\ x_n \\ \end{bmatrix}$,
+the Vandermonde matrix associated with $x$ is
+
+$$
+A=\begin{bmatrix}
+1 & x_1 & x_1^2 &  & x_1^{n-1} \\ 
+1 & x_2 & x_2^2 & \cdots & x_2^{n-1} \\ 
+1 & x_3 & x_3^2 &  & x_3^{n-1} \\ 
+ &  \vdots &  &  & \vdots \\ 
+1 & x_n & x_n^2 & \cdots & x_n^{n-1} \\ 
+\end{bmatrix}.
+$$ We will encounter and study the Vandermonde matrix in the context of
+polynomial interpolation. The point of this exercise is to show (1) this
+matrix is often ill-conditioned, and (2) as a result, it can be
+difficult to accurately solve $Az=b$ when $A$ is a Vandermonde matrix.
+
+a)  Here are three functions to compute a vector norm, compute the
+    condition number of a matrix, and form a Vandermonde matrix from a
+    vector $x$. Read them over and discuss with your neighbors what they
+    do.
+
+```{r}
+# Vector norm 
+vnorm = function(v,p=2) { 
+  if ( p =="I") {
+    return(max(abs(v)))
+  }
+  else {
+    return(sum(abs(v)^p)^(1/p))
+  }
+}
+```
+
+```{r}
+# Condition number of a matrix
+Cond = function(A,p=2) {
+  if (p == 2) {  # by default use the 2-norm
+    s <- svd(A)$d
+    s <- s[s>0]
+    return(max(s)/min(s))
+  }
+  if (p == 1) {  # use the 1 norm
+    Ainv <- solve(A)
+    return(max(colSums(abs(A)))*max(colSums(abs(Ainv))))
+  }
+  if (p == 'I') {   # use the infinity norm
+    Ainv <- solve(A)
+    return(max(rowSums(abs(A)))*max(rowSums(abs(Ainv))))
+  }
+}
+```
+
+```{r}
+# Create a Vandermonde matrix
+Vandermonde = function(x) {
+  n <- length(x)
+  V <- outer( x, 0:(n-1), `^` )
+  return(V)
+}
+```
+
+b)  As an example, we are going to take
+    $x=\begin{bmatrix} 1 \\ 1/2 \\ 1/3\\ \vdots \\ 1/n \\ \end{bmatrix}$.
+    For each $n$ in 2, 4, 6, 8, 10, and 12, compute the condition number
+    of the Vandermonde matrix resulting from this choice of $n$ and $x$.
+    
+```{r}
+result = data.frame(n = seq(2,10, 2), condition_number = 0)
+for(i in seq(2,10, 2)){
+  x = 1/(1:i)
+  conditional_number = Cond(Vandermonde(x), p='I')
+  result[i/2, 2] = conditional_number
+}
+result 
+
+```
+    
+
+c)  For the same choices of $n$ and $x$ as part (b), let $b=A1$, where
+    $A$ is the corresponding Vandermonde matrix and $1$ is an
+    $n \times 1$ column vector of all ones. Then call the command
+
+```{=html}
+<!-- -->
+```
+    z <- solve(A,b)
+    
+    
+
+to find the solution to $Az=b$. For each $n$, compute the *relative
+error* $$ \frac{||z-1||_\infty}{1_\infty}=\max_i(|z_i-1|). $$
+
+    ```{r}
+    library(dplyr)
+    result_c = mutate(result, z = 0)
+    for(i in seq(2,10, 2)){
+      x = 1/(1:i)
+      
+      result[i/2, 2] = conditional_number
+    }
+    result
+    ```
+    
+
+d)  When solving a system of equations $Az=b$, one heuristic (rule of
+    thumb) for estimating how accurate you can expect that solution to
+    be is that the relative error of the solution is approximately equal
+    to machine epsilon times the condition number of the matrix $A$,
+    i.e.,
+    $$ \frac{||z_c-z_a||_\infty}{||{z_a}||_\infty} \approx \epsilon_{\hbox{mach}} \kappa(A),$$
+    where $z_a$ is the actual solution and $z_c$ is the computed
+    solution. Check this out in our example by making a table with four
+    columns:
+
+-   $n$\
+-   the condition number $\kappa(A)$\
+-   the relative error of solving $Az=b$\
+-   $\epsilon_{\hbox{mach}} \kappa(A)$

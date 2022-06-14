@@ -1,0 +1,8 @@
+"0","knitr::opts_knit$set(message=FALSE, warning=FALSE)"
+"0","source(""https://www.macalester.edu/~dshuman1/365/365Functions.r"")"
+"0","library(Matrix)"
+"0","require(expm) "
+"0","require(igraph)"
+"0","library(dplyr)"
+"0","library(ggplot2)"
+"0","library(ggrepel)"

@@ -1,0 +1,199 @@
+---
+title: "| Computational Linear Algebra    \n| Activity 3: Introduction to Limits of Accuracy \n"
+author: "Vichy"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: no
+    theme: cerulean
+---
+
+```{r,echo=FALSE,message=FALSE}
+library(ggplot2)
+```
+
+## Example 1: A Cubic Polynomial with Multiple Roots at $x=\frac{2}{3}$
+
+Consider the polynomial
+
+$$f(x)=x^3-2x^2+\frac{4}{3}x-\frac{8}{27}=(x-\frac{2}{3})^3$$
+
+Let's have a look at the function:
+
+```{r,fig.height=3,fig.width=5}
+x <- seq(-1,2,len=1000)
+f <- function(x) {x^3-2*x^2+4/3*x-8/27}
+root <- data.frame(x=2/3,y=0)
+qplot(x,f(x),geom="line")+
+  geom_hline(yintercept=0,color="red")+
+  geom_point(data=root,aes(x=x,y=y),color="blue",size=3)
+```
+
+Here is my bisection method code:
+
+```{r}
+bisect <- function(f,interval,tol=0.5*10^-10,max.its=40,verbose=FALSE){
+  history <- rep(NA, max.its)
+  a <- interval[1]
+  b <- interval[2]
+  fa <- f(a)
+  fb <- f(b)
+  j <- 1              # counter for verbose printing
+  if (sign(fa)*sign(fb) >= 0 ) 
+    stop("f(a)f(b)<0 not satisfied")
+  for (j in 1:max.its){
+    history[j] <- (a+b)/2
+    if ((b-a)/2 < tol) break
+    fc <- f(history[j])
+    if (verbose==TRUE) {               # show values at each step
+      print(j) 
+      print(c(a,history[j],b,b-a))
+    }
+    if (fc == 0)  break
+    if (sign(fc)*sign(fa) < 0) {
+      b <- history[j]
+      fb <- fc
+    }
+    else {
+      a <- history[j]
+      fa <- fc
+    }
+  }
+  root<-(a+b)/2
+  return(list(root=root,history=history[!is.na(history)]))
+}
+```
+
+\
+
+```{exercise}
+   
+```
+
+a.  Use the bisection method to find the root. Use a starting interval of $[0,1]$ and a tolerance of $0.5*10^{-10}$. Also run this command, which will change the number of digits that `R` displays on output.
+
+```{r}
+options(digits=10)
+bisect_result =  bisect(f, c(0,1), 0.5*10^(-10))
+(bisect_result$root)
+
+```
+
+How close is the answer to the actual root of $\frac{2}{3}$?
+
+b.  Try to find the root with the `R` function `uniroot`. Is that any closer?
+
+    ```{r}
+    uniroot_result = uniroot(f, c(0,1))
+
+    (actual_result = 2/3)
+    bisect_result$root
+    uniroot_result$root
+
+
+    ```
+
+c.  Now let's zoom in very close to the root:
+
+```{r,fig.height=3,fig.width=5}
+x <- seq(0.666656,0.666674,len=1000)
+qplot(x,f(x),geom="point")+
+  geom_hline(yintercept=0,color="red")+
+  geom_point(data=root,aes(x=x,y=y),color="blue",size=3)
+```
+
+Do you have any ideas as to what might be happening? We'll discuss this next week!
+
+\
+
+## Example 2: The Wilkinson Polynomial
+
+Even when we don't have multiple roots, issues can arise, as exemplified by the Wilkinson polynomial, which is named after the numerical analyst James Wilkinson. It is defined as $$W(x) = (x-1)(x-2)(x-3) ... (x-20),$$ which obviously has roots 1, 2, ..., 20. $$
+\begin{align}
+W(x) &= 2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 -     12870931245150988800*x^3 \\
+&+ 8037811822645051776*x^4 - 3599979517947607200*x^5  +     1206647803780373360*x^6 - 311333643161390640*x^7 \\
+&+ 63030812099294896*x^8 -     10142299865511450*x^9 + 1307535010540395*x^{10} - 135585182899530*x^{11} \\
+&+     11310276995381*x^{12} - 756111184500*x^{13} + 40171771630*x^{14} -1672280820*x^{15} 
++     53327946*x^{16} \\ &- 1256850*x^{17} + 20615*x^{18} - 210*x^{19} + x^{20}.\end{align}$$
+
+Here is the function defined in two different forms and plotted
+
+```{r}
+# Function defined in factored format
+Wilkinson <- function(x) {
+  (-20 + x)*(-19 + x)*(-18 + x)*(-17 + x)*(-16 + x)*(-15 + x)*(-14 + x)*(-13 + x)*
+    (-12 + x)*(-11 + x)*(-10 + x)*(-9 + x)*(-8 + x)*(-7 + x)*(-6 + x)*(-5 + x)*(-4 + x)*
+    (-3 + x)*(-2 + x)*(-1 + x)
+}
+
+# Function defined in expanded format
+W <- function(x){
+  2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 - 
+    12870931245150988800*x^3 + 8037811822645051776*x^4 - 3599979517947607200*x^5  + 
+    1206647803780373360*x^6 - 311333643161390640*x^7 + 63030812099294896*x^8 - 
+    10142299865511450*x^9 + 1307535010540395*x^10 - 135585182899530*x^11 + 
+    11310276995381*x^12 - 756111184500*x^13 + 40171771630*x^14 - 1672280820*x^15 + 
+    53327946*x^16 - 1256850*x^17 + 20615*x^18 - 210*x^19 + x^20
+}
+```
+
+```{r,warning=FALSE,fig.height=3,fig.width=5}
+# Plot the Wilkinson polynomial
+x = seq(0,21,len=100000)
+qplot(x,W(x),geom="line")+
+  ylim(c(-5e13,5e13))+
+  ggtitle("Wilkinson Polynomial")+
+  geom_hline(yintercept=0,color="red")+
+  scale_x_continuous(breaks=seq(0,20,by=2))
+```
+
+Note that I used the `ylim` parameter to set the range that is plotted on the $y$-axis.
+
+\
+
+```{exercise}
+   
+```
+
+a.  Use `bisect` and `uniroot` to find the root at 16. Use the bracketing interval $[15.8,16.3]$ and use the unfactored form `W` of the polynomial. How many decimal places does it get correct? Note: with the factored version, it finds it exactly but that isn't so useful, because if we have a function nicely factored, we don't need to do numerical root-finding!
+
+    ```{r}
+    # Uniroot
+    u_result2 = uniroot(W, c(15.8, 16.3))
+    # Bisect
+    b_result2 = bisect(W, c(15.8, 16.3))
+
+    ## result
+    b_result2$root
+    u_result2$root
+    ```
+
+b.  This led Wilkinson to say in 1984: "Speaking for myself, I regard it as the most traumatic experience of my career as a numerical analyst." To feel his trauma, evaluate the function `W` at the root you computed in part a. What do you get? What should it be?
+
+    ```{r}
+
+    x <- seq(16.004,16.007,len=1000)
+    w_b_root = data.frame(x= b_result2$root)
+    w_u_root = data.frame(x = u_result2$root)
+    qplot(x,W(x),geom="point")+
+      geom_hline(yintercept=0,color="red")+
+      geom_point(data=w_b_root,aes(x=x,y=0),color="blue",size=3) + 
+      geom_point(data=w_u_root,aes(x=x,y=0),color="yellow",size=3) 
+      
+    ```
+
+c.  Here is a new polynomial
+
+```{r}
+W2 <- function(x){
+  2432902008176640000 - 8752948036761600000*x + 13803759753640704000*x^2 - 
+    12870931245150988800*x^3 + 8037811822645051776*x^4 - 3599979517947607200*x^5  + 
+    1206647803780373360*x^6 - 311333643161390640*x^7 + 63030812099294896*x^8 - 
+    10142299865511450*x^9 + 1307535010540395*x^10 - 135585182899530*x^11 + 
+    11310276995381*x^12 - 756111184500*x^13 + 40171771630*x^14 -1672280820*x^15 + 
+    53327946*x^16 - 1256850*x^17 + 20615*x^18 - (210+2^(-23))*x^19 + x^20
+}
+```
+
+It is the same as the Wilkinson polynomial, except I have changed the coefficient of $x^{19}$ by reducing it from $-210$ to $-(210 + 2^{-23})$. This is a relatively small change in the problem! See what the root that was at $x = 20$ increases to after this change has been made. Look for it in the interval $[19.5,20.95]$. Huge error magnification is caused by small relative errors in storing the coefficients. This is an impressive example of ill-conditioning, which we will discuss next week.

@@ -1,0 +1,7 @@
+"0","    cereal_plot_data = data.frame(x = C.svd$v[,1], y = C.svd$v[,2], label = factor(cereal$brand))"
+"0","    "
+"0","    cereal_plot_data %>% "
+"0","      ggplot(aes(x,y, label = label, color = label)) + "
+"0","      geom_point() + "
+"0","       geom_text_repel() + "
+"0","      theme(legend.position = 'none')"

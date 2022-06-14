@@ -1,0 +1,1072 @@
+---
+title: "| Computational Linear Algebra    \n| HW3: Complexity, Matrix Norms, Condition Number, and $Ax=b$ \n"
+author: "Vichearith Meas"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: yes
+    toc_float: yes
+    toc_depth: 2
+    theme: cerulean
+    css: "style.css"
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+***Due Monday, February 21, 2022, 11:59PM. Please submit an html of your
+completed work on Moodle. If you wish to write things on paper to
+complement your typed work, you can either submit the hard copy in class
+on Tuesday or you can upload a picture/scan of your work to Moodle.***
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+require(Matrix)
+require(jpeg)
+require(ggplot2)
+set.seed(365)
+```
+
+# Part I: Computational Complexity
+
+## Problem 1: Counting arithmetic for $ABv$
+
+One way to predict how long a computation will take is to count the
+number of "floating-point operations" or "flops" required. A "flop" is
+one division, multiplication, addition, subtraction, or square root.
+Here, we are just going to count the multiplications and divisions
+(which for simplicity we will just call multiplications).
+
+Suppose $A$ and $B$ are $n\times n$ matrices and $v$ is a vector in
+$\mathbb{R}^n$. Think of $n$ as a large number (much greater than $4$ in
+particular).
+
+(a) One method of computing $y = ABv$ is to first calculate $x=Bv$ and
+    then use that to calculate $y = Ax$. Count the total number of
+    multiplications needed for this method.
+
+    ::: answer
+    $Bv$ multiplication cost $N^2$ . Multiplication of $ABv$ is also
+    $n^2$. The combined multiplications is $2n^2$.
+    :::
+
+(b) Another method is to compute the matrix $C = AB$ and then form
+    $y = Cv$. Count the total number of multiplications needed for this
+    method.
+
+    ::: answer
+    In this method, we need to calculated $C$ by multiplying $A$ and
+    $B$. This will take $n^3$ of multiplication since there will be $n$
+    rows and columns.
+
+    Solving $y= Cv$ will cost the same as part a, $n^2$.
+
+    This makes the total of this b method to be $n^3 + n^2$ .
+    :::
+
+(c) What if we find out that both $A$ and $B$ have low-rank structure
+    like this: $$A = u_1y_1^T + u_2y_2^T + u_3y_3^T + u_4y_4^T$$
+    $$B = r_1w_1^T + r_2w_2^T + r_3w_3^T + r_4w_4^T$$ That is, assume we
+    know all of the vectors $u_i, y_i, r_i, w_i$ in these definitions of
+    the $n\times n$ matrices $A$ and $B$. Now, how many multiplications
+    are needed to find $x=Bv$? How many multiplication total to find
+    $ABv$?
+
+    ::: answer
+    <div>
+
+    Since $B$ is a $n$x$n$ matrix, then $v$,$r$ and $w$ are $n$x$1$
+    vector. $$
+    Bv = r_1w_1^Tv + r_2w_2^Tv + r_3w_3^Tv + r_4w_4^Tv
+    $$
+
+    So $w^Tv$ costs $n$ multiplication operation for an $1$x$n$ times
+    $n$x$1$. There are four of $w^Tv$ in $Bv$ which makes a total of
+    $4n$.
+
+    $Bv = x$ has a $n$x1 dimension. Similar to $Bv$, $Ax$ will cost $4n$
+    as $u_iy_i^Tx_i$ cost $n$ multiplication and\
+    $$
+    Ax = u_1y_1^Tx_1 + u_2y_2^Tx_2 + u_3y_3^Tx_3 + u_4y_4^Tx_4
+    $$
+
+    In total, $ABv$ will cost $8n$.
+
+    </div>
+    :::
+
+\
+
+# Part II: Matrix Norms and Condition Numbers
+
+## Problem 2: The condition number of an orthogonal matrix
+
+A real $n \times n$ matrix $Q$ is *orthonormal* if
+
+$$ Q^{T}Q=QQ^T=I;~i.e., Q^{-1}=Q^T.$$
+
+Show that $||Q||_2=||Q^{-1}||_2=1$, and therefore the 2-norm condition
+number of any orthonormal matrix $Q$ is
+$\kappa_2(Q)=||Q||_2 ||Q^{-1}||_2=1$.
+
+Notes unrelated to the problem:
+
+-   Sometimes you will see these matrices just called *orthogonal
+    matrices*.\
+-   The analagous matrices that contain complex entries ($Q^*Q=QQ^*=I$,
+    where the $~^*$ is a conjugate transpose) are called *unitary*.
+
+::: answer
+$$
+||Q||_2 = \sqrt{max\{eigen(Q^TQ)\}} = \sqrt{max\{eigen(I)\}} = 1 \\
+||Q^{-1}||_2 = ||Q^{T}||_2 = \sqrt{max\{eigen(Q^TQ^{T^T})\}} = \sqrt{max\{eigen(Q^TQ)\}}= \sqrt{max\{eigen(I)\}} = 1 \\
+\Downarrow \\
+||Q||_2 = ||Q^{-1}||_2  = 1   \\
+\Downarrow \\
+\kappa_2(Q)=||Q||_2 ||Q^{-1}||_2=(1)(1) = 1
+$$
+:::
+
+\
+
+## Problem 3: Image of a unit ball under a linear mapping
+
+Here is a `UnitCircleMap` function, which shows the image of the unit
+ball under a linear mapping $A$ and computes the matrix norm of $A$.
+
+```{r}
+UnitCircleMap <- function(A,p=2) {
+  # Compute values of x on the unit circle and compute p-norm of A
+  if (p==2) {
+    t <- seq(0,2*pi,len=1000)
+    x <- cos(t)
+    y <- sin(t)
+    nn <- norm(A,type="2")
+    ni <- as.character(p)
+  }
+  else if (p==1){
+    # Insert some code her
+    nn <- norm(A,type="1")
+    ni <- as.character(p)
+  }
+  else if (p=="I"){
+    # Insert some code here
+    nn <- norm(A,type="I")
+    ni <- "Inf"
+  }
+  
+  # Compute values of Ax
+  pts <- A %*% t(cbind(x,y))
+  newx <- pts[1,]
+  newy <- pts[2,]
+  
+  # Assemble into a data frame
+  xx <- c(x,newx)
+  yy <- c(y,newy)
+  type=c(rep("x",length(x)),rep("Ax",length(newx)))
+  df <- data.frame(x=xx,y=yy,type=type)
+  
+  normSize <- sprintf("||A||_%s = %1.2f",ni,nn)
+  M <- max(c(1.01*newx, 1.01*newy, 1.5))
+  
+  # Plot
+  ggplot(df,aes(x=x,y=y,color=type))+
+    geom_point()+
+    labs(x="x1",y="x2",color=element_blank())+
+    coord_fixed(ratio=1)+
+    scale_color_manual(values=c("red","black"))+
+    ggtitle(normSize)+
+    lims(x=c(-M,M),y=c(-M,M))
+}
+```
+
+```{r}
+A <- cbind(c(2,3),c(1,7))
+UnitCircleMap(A,2)
+```
+
+(a) My `UnitCircleMap` function currently only works for the $p=2$ norm.
+    Modify it to let the user choose the norm to be 1, 2, or $\infty$
+    ("I"), by filling in the two missing sections of code. Test your
+    function on the same $A$ matrix from above.
+
+    ::: answer
+    ```{r}
+    UnitCircleMap <- function(A,p=2) {
+      # Compute values of x on the unit circle and compute p-norm of A
+      if (p==2) {
+        t <- seq(0,2*pi,len=1000)
+        x <- cos(t)
+        y <- sin(t)
+        nn <- norm(A,type="2")
+        ni <- as.character(p)
+      }
+      else if (p==1){
+        # Insert some code here
+        x = seq(-1,1, len= 1000) 
+        y = 1 - abs(x) 
+        x = c(x,x)
+        y = c(y,-y)
+        nn <- norm(A,type="1")
+        ni <- as.character(p)
+      }
+      else if (p=="I"){
+        # Insert some code here
+        x = c(rep(1,500), rep(-1,500), seq(-1,1,len=500),seq(-1,1,len=500) )
+        y = c(seq(-1,1, len=500),seq(-1,1, len=500),rep(1,500),rep(-1,500) )
+        nn <- norm(A,type="I")
+        ni <- "Inf"
+      }
+      
+      # Compute values of Ax
+      pts <- A %*% t(cbind(x,y))
+      newx <- pts[1,]
+      newy <- pts[2,]
+      
+      # Assemble into a data frame
+      xx <- c(x,newx)
+      yy <- c(y,newy)
+      type=c(rep("x",length(x)),rep("Ax",length(newx)))
+      df <- data.frame(x=xx,y=yy,type=type)
+      
+      normSize <- sprintf("||A||_%s = %1.2f",ni,nn)
+      M <- max(c(1.01*newx, 1.01*newy, 1.5))
+      
+      # Plot
+      ggplot(df,aes(x=x,y=y,color=type))+
+        geom_point()+
+        labs(x="x1",y="x2",color=element_blank())+
+        coord_fixed(ratio=1)+
+        scale_color_manual(values=c("red","black"))+
+        ggtitle(normSize)+
+        lims(x=c(-M,M),y=c(-M,M))
+    }
+
+
+    ```
+
+    ```{r}
+    UnitCircleMap(A,2)
+    UnitCircleMap(A,1)
+    UnitCircleMap(A,"I")
+
+    ```
+    :::
+
+(b) Use your code to determine whether
+    $||Q||_1=||Q||_{\infty}=||Q||_2=1$ for all orthonormal matrices $Q$.
+
+    **Hint**: Try
+    $Q=\begin{pmatrix} \frac{1}{\sqrt{2}} & \frac{-1}{\sqrt{2}} \\ \frac{1}{\sqrt{2}} & \frac{1}{\sqrt{2}} \end{pmatrix}$,
+    which is a rotation matrix that rotates vectors counter-clockwise by
+    $\frac{\pi}{4}$.
+
+    ::: answer
+    
+    Based on the example below, it seems that the $||Q||_1=||Q||_{\infty}=||Q||_2=1$ does not always true. The $Q$ matrix is a orthonormal matrix but the value of $||Q||_1$, $||Q||_{\infty}$, and $||Q||_2=1$ are different. 
+    
+    ```{r}
+    Q = matrix(c(1/sqrt(2), -1/sqrt(2), 1/sqrt(2), 1/sqrt(2) ), byrow=TRUE, nrow=2)
+    UnitCircleMap(Q,1)
+    UnitCircleMap(Q,2)
+    UnitCircleMap(Q,"I")
+    Q%*%t(Q)
+    
+
+    F = matrix(c(1*cos(pi), -2*sin(pi), 
+                 2*sin(pi),1*cos(pi)), byrow=TRUE, nrow=2)
+    UnitCircleMap(F,1)
+    UnitCircleMap(F,2)
+    UnitCircleMap(F,"I")
+    F%*%t(F)
+    
+    R = matrix(c(1,0,0,-1), byrow=TRUE, nrow=2) # (reflection across x-axis)
+    UnitCircleMap(R,1)
+    UnitCircleMap(R,2)
+    UnitCircleMap(R,"I")
+
+    ```
+    :::
+
+# Part II: $Ax=b$
+
+## Problem 4: Applications of linear systems
+
+Write one paragraph describing a "real world" application you find
+interesting where it is important to solve large systems of linear
+equations.
+
+::: answer
+A interesting life application of system of linear equation for me is
+about solving traffic flow that was first mentioned to me in linear
+algebra class. It was a common yet powerful example to shows the power
+of linear algebra in solving complex and interconnected problem. When I
+was asked to solve the problem, I could think of a way to approach the
+issue. When the problem get translated into system of equation,
+everything becomes easier to solve. That is powerful.
+
+This example of the traffic flow problem is just a variation many
+networking problems that can be solved using large systems of linear
+equations. These networking problems could be current flow on a circuit
+board, liquid flow in a pipe system, irrigation management, etc.
+:::
+
+\
+
+## Problem 5: Proof of key step in A=LU
+
+In class, we showed how to construct a sequence of unit lower-triangular
+matrices $\{L_{k}\}_{k=1,2,\ldots,n-1}$ of the form
+
+$$ L_{k}=\begin{pmatrix} 1 & & & & & \\
+& \ddots & & & & \\
+& & 1 & & & \\
+& & -\ell_{k+1,k} & 1 & & \\
+& & \ddots & & \ddots & \\
+& & -\ell_{n,k} & &  & 1 
+\end{pmatrix}~, \hbox{ where } \ell_{j,k}=\frac{A_{j,k}}{A_{k,k}},~\hbox{ for } k\leq j \leq n, $$
+
+such that
+
+$$ L_{n-1} L_{n-2} \ldots L_{2} L_{1} A = U, $$
+
+with $U$ being an upper-triangular matrix. We now want to show in two
+steps that
+
+$$L:= L_{1}^{-1} L_{2}^{-1} \ldots L_{n-2}^{-1} L_{n-1}^{-1} $$
+
+is a unit lower-triangular matrix.
+
+(a) Show that
+
+    $$  L_{k}^{-1} = \begin{pmatrix} 1 & & & & & \\
+    & \ddots & & & & \\
+    & & 1 & & & \\
+    & & \ell_{k+1,k} & 1 & & \\
+    & & \ddots & & \ddots & \\
+    & & \ell_{n,k} & &  & 1 
+    \end{pmatrix}. $$
+
+    **Hint**: Start by showing that $L_k=I-\ell_k e_k^{T}$, where $e_k$
+    is an $n \times 1$ vector with a 1 in the $k^{th}$ entry, and zeros
+    elsewhere, and
+
+    $$ \ell_k = \begin{pmatrix} 0 \\ \vdots \\ 0 \\ \ell_{k+1,k} \\ \vdots \\ \ell_{n,k} \end{pmatrix}. $$
+
+    ::: answer
+    $$
+    e_k =  \begin{pmatrix} 0 \\ \vdots \\ e_{k} = 1 \ \\ \vdots \\  0 \\  \end{pmatrix} \Rightarrow \ell_k e_k^T = \begin{pmatrix} 0 \\\vdots \\ 0 \\ \ell_{k+1,k} \\\vdots \\ \ell_{n,k} \end{pmatrix}\begin{pmatrix} 0 & \cdots & 1 &\cdots 0\end{pmatrix} = 
+      \begin{pmatrix} 
+      0 & & & & & \\
+      & \ddots & & & & \\
+      & & 0 & & & \\
+      & & \ell_{k+1,k} & 0 & & \\
+      & & \vdots & & \ddots & \\
+      & & \ell_{n,k} & &  & 0 
+      \end{pmatrix}
+      $$
+
+    $$
+      (I + \ell_k e_k^T)(I - \ell_k e_k^T) = I^2 - \ell_ke_k^T\ell_k e_k^T
+      $$
+
+    We know that $e_k$ is an $n \times 1$ vector with a 1 in the
+    $k^{th}$ entry, and zeros elsewhere and $\ell_k$ does not have any
+    entry until $(k+1)th$ entry in column $kth$, then $$
+    e_k^T\ell_k = \begin{pmatrix} 0 & \cdots & 1 &\cdots 0\end{pmatrix}\begin{pmatrix} 0 \\\vdots \\ 0 \\ \ell_{k+1,k} \\\vdots \\ \ell_{n,k} \end{pmatrix} = 0 \\
+    \Downarrow \\
+    \ell_k e_k^T\ell_k e_k^T  = 0 \\
+    \Downarrow \\
+    (I  + \ell_k e_k^T)(I  - \ell_k e_k^T) = 0
+    $$
+
+    However, $I -\ell_k e_k^T = L_k$.
+
+    $$
+      (I  + \ell_k e_k^T)(I  - \ell_k e_k^T) = (I  + \ell_k e_k^T)L_k = I \\
+      \Downarrow \\
+      I  + \ell_k e_k^T = L_k^{-1} \\
+      \Downarrow \\
+      L_k^{-1} = \begin{pmatrix} 
+      1 & & & & & \\
+      & \ddots & & & & \\
+      & & 1 & & & \\
+      & & \ell_{k+1,k} & 1 & & \\
+      & & \vdots & & \ddots & \\
+      & & \ell_{n,k} & &  & 1 
+      \end{pmatrix} \\
+      $$
+    :::
+
+(b) Now show that
+
+    $$
+    L:= L_{1}^{-1} L_{2}^{-1} \ldots L_{n-2}^{-1} L_{n-1}^{-1} = \begin{pmatrix} 1 & & & & \\
+    \ell_{21} & 1 & & & \\
+    \ell_{31} & \ell_{32} & 1 & &  \\
+    \vdots & \vdots & \ddots & \ddots & \\
+    \ell_{n1} & \ell_{n2} & \cdots & \ell_{n,n-1} & 1    \\
+    \end{pmatrix}
+    $$
+
+    ::: answer
+    ```{=tex}
+    \begin{align*}
+      L_{1}^{-1} L_{2}^{-1} \ldots L_{n-2}^{-1} L_{n-1}^{-1}   
+      =& (I  + \ell_1 e_1^T)(I  + \ell_2 e_2^T)\ldots (I  + \ell_{n-2} e_{n-2}^T)(I  + \ell_{n-1} e_{n-1}^T) \\
+      =& (I^2   + I\ell_2 e_2^T + \ell_1 e_1^TI + \ell_1 e_1^T\ell_2 e_2^T )\ldots (I^2   + I\ell_{n-1} e_{n-1}^T + \ell_{n-2} e_{n-2}^TI + \ell_{n-2} e_{n-2}^T\ell_{n-1} e_{n-1}^T ) \\
+      & \text{since we show that } e_k^T\ell_{k} = 0 \text{ so is the } e_k^T\ell_{k+1} = 0\\
+      =& (I   + \ell_2 e_2^T + \ell_1 e_1^T + \ell_1 e_1^T\ell_2 e_2^T )\ldots (I   + \ell_{n-1} e_{n-1}^T + \ell_{n-2} e_{n-2}^T + \ell_{n-2} e_{n-2}^T\ell_{n-1} e_{n-1}^T ) \\
+
+      =& (I   + \ell_2 e_2^T + \ell_1 e_1^T )(I   + \ell_4 e_4^T + \ell_3 e_3^T )\ldots  (I   + \ell_{n-3} e_{n-3}^T + \ell_{n-4} e_{n-4}^T)(I   + \ell_{n-1} e_{n-1}^T + \ell_{n-2} e_{n-2}^T)\\
+      =& (I^2   + \ell_4 e_4^T + \ell_3 e_3^T +   \ell_2 e_2^T + \ell_2 e_2^T\ell_4 e_4^T + \ell_2 e_2^T \ell_3 e_3^T  + \ell_1 e_1^T + \ell_1 e_1^T\ell_4 e_4^T + \ell_1 e_1^T\ell_3 e_3^T  )\ldots (I^2   + \ldots  + \ell_{n-4} e_{n-4}^T\ell_{n-2} e_{n-2}^T)\\
+
+      =& (I + \ell_4 e_4^T + \ell_3 e_3^T +   \ell_2 e_2^T +  \ell_1 e_1^T)\ldots (I +  \ell_{n-4} e_{n-4}^T + \ell_{n-3} e_{n-3}^T + \ell_{n-2} e_{n-2}^T + \ell_{n-1} e_{n-1}^T )\\
+      &\ldots \\
+      =& (I  +  \ell_1 e_1^T +   \ell_2 e_2^T + \ldots +  \ell_{n-4} e_{n-4}^T + \ell_{n-3} e_{n-3}^T + \ell_{n-2} e_{n-2}^T + \ell_{n-1} e_{n-1}^T )\\
+      \end{align*}
+    ```
+    Each $\ell_k e_k^T$ in
+    $I + \ell_1 e_1^T + \ell_2 e_2^T + \ldots + \ell_{n-4} e_{n-4}^T + \ell_{n-3} e_{n-3}^T + \ell_{n-2} e_{n-2}^T + \ell_{n-1} e_{n-1}^T$
+    is a zero matrix with entry in column $k$th from row $(k+1)$ to $n$;
+    therefore, $L_{1}^{-1} L_{2}^{-1} \ldots L_{n-2}^{-1} L_{n-1}^{-1}$
+    is a combination of an identity matrix $I$ and columns under the
+    diagonal line from 1 to $n-1$.
+    :::
+
+\
+
+## Problem 6: Heat transfer application
+
+*This problem is from Section 2.5, page 131 of Linear Algebra and Its
+Applications, by David Lay, the textbook many of you used for MATH 236.*
+
+![](https://www.macalester.edu/~dshuman1/365/heatFlow.jpg)
+
+An important concern in the study of heat transfer is to determine the
+steady-state temperature distribution of a thin plate when the
+temperature around the boundary is known. Assume the plate shown in the
+figure above represents a cross section of a metal beam, with negligible
+heat flow in the direction perpendicular to the plate. Let the variables
+$x_1, x_2, \ldots, x_8$ denote the temperatures at nodes 1 through 8 in
+the picture. In steady state, the temperature at a node is approximately
+equal to the average of the four nearest nodes (to the left, above,
+right, below).
+
+a)  The solution to the approximate steady-state heat flow problem for
+    this plate can be written as a system of linear equations $Ax=b$,
+    where $x=[x_1, x_2, \ldots, x_8]$ is the vector of temperatures at
+    nodes 1 through 8. Find the $8 \times 8$ matrix $A$ and the vector
+    $b$. Hint: $A$ should be a banded matrix with many zeros in the top
+    right and bottom left parts of $A$.
+
+    ::: answer
+    The system of equation represent the relationship between nodes:
+
+    $$
+    \begin{cases}
+    4x_1 = 0 + 5 + x_2 + x_3\\
+    4x_2 = 10 + 5 + x_1 + x_4\\
+    4x_3 = 0 + x_5 + x_1 + x_4\\
+    4x_4 = 10 + x_3 + x_2 + x_6\\
+    4x_5 = 0 + x_3 + x_7 + x_6\\
+    4x_6 = 10 + x_4 + x_5 + x_8\\
+    4x_7 = 0 + 20 + x_5 + x_8\\
+    4x_8 = 10 + 20 + x_6 + x_7
+    \end{cases}
+    $$
+
+    $$
+    \begin{cases}
+    -4x_1   & + & 1x_2 & + & 1x_3 & + & 0x_4& + & 0x_5& + & 0x_6 &+ &0x_7  &+ &0x_8 &= &-5\\     
+    1x_1   & + & -4x_2 &+ & 0x_3 & + & 1x_4 &+ & 0x_5 &+ & 0x_6 &+ &0x_7  &+ &0x_8& = &-10\\    
+    1x_1   & + & 0x_2 &+ & -4x_3 & + & 1x_4& + & 1x_5 &+ & 0x_6& +& 0x_7 & +& 0x_8& = &0\\ 
+    0x_1   & + & 1x_2 &+ & 1x_3 & + & -4x_4 &+ & 0x_5 &+ & 1x_6& +& 0x_7 & +& 0x_8 &= &-10\\    
+    0x_1   & + & 0x_2 &+ & 1x_3 & + & 0x_4 &+ & -4x_5 &+ & 1x_6& +& 1x_7 & +& 0x_8 &= &0\\ 
+    0x_1   & + & 0x_2 &+ & 0x_3 & + & 1x_4 &+ & 1x_5 &+ & -4x_6& +& 0x_7 & +& 1x_8& =&-10\\ 
+    0x_1   & + & 0x_2 &+ & 0x_3 & + & 0x_4& + & 1x_5 &+ & 0x_6 &+ &-4x_7 & +& 1x_8 &= &-20\\    
+    0x_1   & + & 0x_2 &+ & 0x_3 & + & 0x_4 &+ & 0x_5 &+ & 1x_6& +& 1x_7 & +& -4x_8 &= &-30\\ 
+    \end{cases}
+    $$
+
+    $$
+      A = \begin{pmatrix}
+      -4 & 1 & 1 & 0 & 0 & 0 & 0 & 0 \\
+       1 &-4 & 0 & 1 & 0 & 0 & 0 & 0 \\
+       1 & 0 &-4 & 1 & 1 & 0 & 0 & 0 \\
+       0 & 1 & 1 &-4 & 0 & 1 & 0 & 0 \\
+       0 & 0 & 1 & 0 &-4 & 1 & 1 & 0 \\
+       0 & 0 & 0 & 1 & 1 &-4 & 0 & 1 \\
+       0 & 0 & 0 & 0 & 1 & 0 &-4 & 1 \\
+       0 & 0 & 0 & 0 & 0 & 1 & 1 &-4 
+      \end{pmatrix}
+      $$
+
+    $$
+      b = \begin{pmatrix}
+      -5 \\
+      -10 \\
+      0 \\
+      -10 \\
+       0\\
+      -10\\
+      -20 \\
+      -30 
+      \end{pmatrix}
+      $$
+    :::
+
+b)  Use your function from activity A8 to perform an LU factorization of
+    $A$. Do you notice anything special about the structures of $L$ and
+    $U$?
+
+    ::: answer
+    The lower matrix $L$ and upper matrix $U$ are banded matrices with
+    many zeros in the top right and bottom left parts similar to the
+    original matrix $A$.
+
+    ```{r}
+    myUL = function(A){
+    if (nrow(A) != ncol(A)){
+      return('No Square Matrix')
+    }
+
+    n = nrow(A)
+    U = A
+    L = spMatrix(n,n, i= 1:n, j=1:n, x=rep(1,n))
+
+    for(k in 1:(n-1)){   # RUN N-1 TIME
+      if( U[k,k] == 0){
+        stop('Zero Pivot found!')
+      }
+      
+      for(j in (k+1):n){  # PROCESS ROW: FROM PIVOT TO THE END
+        L[j,k] = U[j,k]/U[k,k]        # FOR EACH ROW IN COL, ENTRY/PIVOT
+        U[j,k:n] = U[j,k:n] - L[j,k]*U[k,k:n] 
+      }
+    }
+
+    return(list(L= L, U=U))
+    }
+
+       
+
+    P6 = spMatrix(8,8,
+                   i=c(1:8,seq(2, 8, 2),  seq(1, 8, 2), 3:8 , 1:6), 
+                   j=c(1:8, seq(1, 8, 2), seq(2, 8, 2), 1:6 , 3:8), 
+                   x=c(rep(-4,8), rep(1,4), rep(1,4), rep(1,6), rep(1,6)))
+
+    P6b = matrix(c(-5 ,-10,0 ,-10, 0,-10,-20,-30 ), nrow = 8, ncol = 1)
+    P6A = myUL(P6)
+    P6A
+
+    ```
+    :::
+
+c)  Once you have an LU factorization for a matrix $A$, you need to do
+    the two-step procedure to complete the back substitution to solve
+    $Ax=b$. Here is code for that:
+
+    ```{r}
+    mySolve<-function(L,U,b,tol=1e-10){
+
+      n <- nrow(L)
+      
+      # First solve Ly=b 
+      y <- rep(0,n)        # pre-allocate a vector y with 0s in it.
+      if(abs(L[1,1])<tol) stop('There is a zero on the diagonal of L')
+      y[1] <- b[1]/L[1,1]  # Fill in the 1st value of y
+      for (j in 2:n ) {
+    if(abs(L[j,j])<tol) stop('There is a zero on the diagonal of L')
+    y[j] <- (b[j] - L[j,1:(j-1)]%*%y[1:(j-1)])/L[j,j]
+      }
+
+      # Then solve Ux=y 
+      x <- rep(0,n)        # pre-allocate a vector x with 0s in it.
+      if(abs(U[n,n])<tol) stop('There is a zero on the diagonal of U')
+      x[n] <- y[n]/U[n,n]  # Fill in the nth value of x
+      for (j in (n-1):1 ) {
+    if(abs(U[j,j])<tol) stop('There is a zero on the diagonal of U')
+    x[j] <- (y[j] - U[j,(j+1):n]%*%x[(j+1):n])/U[j,j]
+      }
+      return(x)
+    }
+    ```
+
+    Make sure you understand what the code is doing, and then use it to
+    find the steady-state temperatures at nodes 1 through 8.
+
+    ::: answer
+    ```{r}
+    P6b
+    mySolve(P6A$L, P6A$U, P6b)
+    ```
+    :::
+
+d)  The temperature on the right-hand side of the plate was measured
+    incorrectly. It is actually 30 degrees. Find the new steady-state
+    temperatures. Hint: you should not do another LU factorization!
+
+    ::: answer
+    The mismeasurement on the right-hand side of the plate affect node 7
+    and 8. Just need to update row 7 and 8 in $b$. The system of
+    equation stay the same except vector $b$.
+
+    ```{r}
+    P6b_correct = matrix(c(-5 ,-10,0 ,-10, 0,-10,-30,-40 ), nrow = 8, ncol = 1)
+    mySolve(P6A$L, P6A$U, P6b_correct)
+    ```
+    :::
+
+e)  Use the R function `solve(A)` to compute $A^{-1}$. Note that
+    $A^{-1}$ is a **dense** matrix (without many zeros). When $A$ is
+    large, $L$ and $U$ can be stored in much less space than $A^{-1}$.
+    This fact is another reason for preferring the LU factorization of
+    $A$ to $A^{-1}$ itself.
+
+    ::: answer
+    ```{r}
+    solve(P6)
+
+    ```
+    :::
+
+## Problem 7: $PA=LU$ example
+
+Solve the following system by finding the $PA=LU$ factorization and then
+carrying out the two-step back substitution (all by hand):
+
+$$ 
+A=\begin{pmatrix}
+-1 & 0 & 1 \\
+3 & 1 & 1 \\
+2 & 0 & 1 
+\end{pmatrix} \begin{pmatrix} x_1 \\ x_2\\ x_3\end{pmatrix}=\begin{pmatrix} 2 \\ 5 \\ 5 \end{pmatrix}. 
+$$
+$$ 
+B=\begin{pmatrix}
+ 2 & -1 & -1& -1& -1& -1& -1&  0&  0&  0&  0&  0&  0&  0\\
+-1 &  2 & 0 & 0 & 0 &-1 &-1 & 0 & 0 & 0 & 0 & 0 & 0 &-1\\
+ 0 & -1 & 2 &-1 &-1 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0\\
+ 0 &  0 & 0 & 2 &-1 & 0 & 0 &-1 &-1 &-1 & 0 & 0 & 0 & 0\\
+ 0 &  0 & 0 &-1 & 2 & 0 & 0 & 0 & 0 & 0 &-1 &-1 &-1 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 2 &-1 & 0 & 0 & 0 & 0 & 0 & 0 &-1\\
+ 0 &  0 & 0 & 0 & 0 &-1 & 2 & 0 & 0 & 0 & 0 & 0 & 0 &-1\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 2 & 0 &-1 & 0 & 0 & 0 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 0 & 2 &-1 & 0 & 0 & 0 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 2 & 0 & 0 & 0 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 2 & 0 & 0 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 2 & 0 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 2 & 0\\
+ 0 &  0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 0 & 2\\
+\end{pmatrix}
+$$
+
+
+::: answer
+Factorization
+
+$$
+A = \begin{pmatrix}
+-1 & 0 & 1 \\
+3 & 1 & 1 \\
+2 & 0 & 1 
+\end{pmatrix}
+$$ \begin{align*}
+P=&\begin{pmatrix}
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+1 & 0 & 0 
+\end{pmatrix}
+&L =&\begin{pmatrix}
+1 & 0 & 0 \\
+0 & 1 & 0 \\
+0 & 0 & 1 
+\end{pmatrix}
+
+&U=&\begin{pmatrix}
+3 & 1 & 1 \\
+2 & 0 & 1 \\
+-1 & 0 & 1 
+\end{pmatrix} \\
+
+\hline
+
+P=&\begin{pmatrix}
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+1 & 0 & 0 
+\end{pmatrix}
+
+&L =&\begin{pmatrix}
+1 & 0 & 0 \\
+\frac{2}{3} & 1 & 0 \\
+-\frac{1}{3} & 0 & 1 
+\end{pmatrix}
+
+&U=&\begin{pmatrix}
+3 & 1 & 1 \\
+0 & -\frac{2}{3} & \frac{1}{3} \\
+0 & \frac{1}{3} & \frac{4}{3} 
+\end{pmatrix} \\
+
+\hline
+
+P=&\begin{pmatrix}
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+1 & 0 & 0 
+\end{pmatrix}
+
+&L =&\begin{pmatrix}
+1 & 0 & 0 \\
+\frac{2}{3} & 1 & 0 \\
+-\frac{1}{3} & -\frac{1}{2} & 1 
+\end{pmatrix}
+
+&U=&\begin{pmatrix}
+3 & 1 & 1 \\
+0 & -\frac{2}{3} & \frac{1}{3} \\
+0 & 0 & \frac{3}{2} 
+\end{pmatrix} 
+\end{align*}
+
+$$PA = LU$$
+
+$$
+\begin{pmatrix}
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+1 & 0 & 0 
+\end{pmatrix}
+\begin{pmatrix}
+-1 & 0 & 1 \\
+3 & 1 & 1 \\
+2 & 0 & 1 
+\end{pmatrix}= \begin{pmatrix}
+1 & 0 & 0 \\
+\frac{2}{3} & 1 & 0 \\
+-\frac{1}{3} & -\frac{1}{2} & 1 
+\end{pmatrix}
+\begin{pmatrix}
+3 & 1 & 1 \\
+0 & -\frac{2}{3} & \frac{1}{3} \\
+0 & 0 & \frac{3}{2} 
+\end{pmatrix} = 
+\begin{pmatrix}
+3 & 1 & 1 \\
+2 & 0 & 1 \\
+-1 & 0 & 1 
+\end{pmatrix}
+$$
+:::
+
+::: answer
+Solve $Ax = b$ by solving $PAx = LUx = Pb$:
+
+1.  Solve $Ly = Pb$ for $y$:
+
+```{=tex}
+\begin{pmatrix}
+1 & 0 & 0 \\
+\frac{2}{3} & 1 & 0 \\
+-\frac{1}{3} & -\frac{1}{2} & 1 
+\end{pmatrix}
+\begin{pmatrix}
+y_1\\
+y_2\\
+y_3
+\end{pmatrix}
+=
+
+\begin{pmatrix}
+0 & 1 & 0 \\
+0 & 0 & 1 \\
+1 & 0 & 0 
+\end{pmatrix}
+\begin{pmatrix} 2 \\ 5 \\ 5 \end{pmatrix}
+
+\begin{pmatrix}  5 \\ 5 \\ 2 \end{pmatrix}\\
+
+\begin{cases}
+y_1 = 5\\
+\frac{2}{3}y_1 + y_2 = 5 \\
+-\frac{1}{3}y_1 -\frac{1}{2}y_2  + y_3 = 2 
+\end{cases}\\
+\begin{cases}
+y_1 = 5\\
+\frac{10}{3} + y_2 = 5 \\
+-\frac{5}{3} -\frac{1}{2}y_2  + y_3 = 2 
+\end{cases}\\
+
+
+\begin{cases}
+y_1 = 5\\
+ y_2 = \frac{5}{3} \\
+   y_3 = 2 + \frac{5}{3} + \frac{1}{2}(\frac{5}{3}) 
+\end{cases}\\
+\begin{cases}
+y_1 = 5\\
+ y_2 = \frac{5}{3} \\
+   y_3 = \frac{9}{2} 
+\end{cases}
+```
+2.  Solve $Ux = y$ for $x$
+
+```{=tex}
+\begin{pmatrix}
+3 & 1 & 1 \\
+0 & -\frac{2}{3} & \frac{1}{3} \\
+0 & 0 & \frac{3}{2} 
+\end{pmatrix}
+\begin{pmatrix}
+x_1\\
+x_2\\
+x_3
+\end{pmatrix}
+=
+\begin{pmatrix}
+5\\
+\frac{5}{3}\\
+\frac{9}{2}
+\end{pmatrix}
+\\
+\begin{cases}
+3x_1 &+ x_2 &+ x_3 &= 5\\
+&- \frac{2}{3}x_2 &+ \frac{1}{3}x_3 &= \frac{5}{3}\\
+&& \frac{3}{2}x_3 &= \frac{9}{2}\\
+\end{cases}
+\\
+\begin{cases}
+3x_1 &+ x_2 &+ 3 &= 5\\
+&- \frac{2}{3}x_2 &+ \frac{1}{3}(3) &= \frac{5}{3}\\
+&& x_3 &= 3
+\end{cases}
+\\
+\begin{cases}
+3x_1 & -1 &+ 3 &= 5\\
+&& x_2 &= -1\\
+&& x_3 &= 3
+\end{cases}
+\\
+\begin{cases}
+ x_1 &= 1\\
+ x_2 &= -1\\
+ x_3 &= 3
+\end{cases}
+```
+:::
+
+## Problem 8: Sparse LU Factorization
+
+*Note: This problem was taken from the take-home portions of an old
+midterm exam.*
+
+Sparse matrices commonly appear when trying to solve partial
+differential equations by discretizing them. There are different methods
+to do this, but one of the most straightforward uses finite difference
+approximations for the partial differential operators (just as finite
+difference approximations can be used for the derivative operator in one
+of the options for Technical Report 1).
+
+For example, when doing a discrete approximation to a 2D heat diffusion
+problem, you end up with a sparse matrix with a block structure.
+Specifically, if the approximation grid contains $k_1$ by $k_2$ interior
+locations, you end up with a $(k_1\cdot k_2) \times (k_1\cdot k_2)$
+matrix of the form $$
+A=\begin{bmatrix}
+B&-I& & & & \\
+-I&B& -I & & & \\
+& -I& \ddots & \ddots & &  \\
+& & \ddots & \ddots & \ddots &  \\
+& &  & \ddots & \ddots & -I  \\
+& &  & & -I & B  
+\end{bmatrix},
+$$ where each $I$ is the $k_1 \times k_1$ identity matrix, and each $B$
+is a $k_1 \times k_1$ matrix of the form $$
+B=\begin{bmatrix}
+4&-1& & & & \\
+-1&4& -1 & & & \\
+& -1& \ddots & \ddots & &  \\
+& & \ddots & \ddots & \ddots &  \\
+& &  & \ddots & \ddots & -1 \\
+& &  & & -1 & 4  
+\end{bmatrix}.
+$$
+
+Looking back at $A$, there are then $k_2$ copies of $B$ down the
+diagonal of $A$. For example, if $k_1=5$ and $k_2=3$, the sparsity
+pattern looks like this:
+
+![](https://www.macalester.edu/~dshuman1/365/sparsity_pattern.png)
+
+Here is the actual matrix for that same case:
+![](https://www.macalester.edu/~dshuman1/365/ActualMatrix.jpeg)
+
+As a final example, here is the actual matrix for the case of $k_1=8$
+and $k_2=4$ ![](https://www.macalester.edu/~dshuman1/365/Actual84.jpeg)
+
+(a) Generate the matrix $A$ above for the case of $k_1=5$ and $k_2=3$.
+
+***Extra Credit***: Write a function `sparsePattern(k1,k2)` that takes
+any values of $k_1$ and $k_2$ and returns the matrix A. Check that it
+matches the examples above and try it on a couple of different matrices.
+
+::: answer
+```{r}
+
+
+
+
+B = function(start_i, k1) {
+  return(list(
+    i = c(start_i : (start_i+k1 -1) , start_i:(start_i+k1 -2), (start_i + 1):(start_i+k1 -1) ), 
+    j = c(start_i : (start_i + k1 -1),  (start_i + 1):(start_i+k1 -1), start_i:(start_i+k1 -2)  ), 
+    x = c(rep(4, k1), rep(-1, (k1-1)),rep(-1,(k1-1) ))
+  ))
+}
+
+
+sparsePattern = function(k1,k2){
+  n = k1*k2
+
+  matrix = spMatrix(n, n, 
+                    i = c((k1 + 1):n    ,1:(n-k1) ), 
+                    j = c(1:(n-k1), (k1+1):n), 
+                    x = rep( rep(-1, (n-k1)), 2)
+                    )
+  for (start in seq(1, n, k1)) {
+    b = B(start, k1)
+    for (index in 1:(3*k1 -2) ){
+      matrix[b$i[index], b$j[index]] = b$x[index]
+    }
+  }
+
+  return(matrix)
+}
+
+
+(sparsePattern(5,3))
+```
+
+```{r}
+options(max.print = .Machine$integer.max)
+
+image(sparsePattern(8,4))
+image(sparsePattern(8,3))
+image(sparsePattern(8,2))
+
+```
+:::
+
+(b) One issue with using the LU decomposition on a sparse matrix like
+    $A$ is that the factors $L$ and $U$ have more non-zero entries than
+    $A$. This phenomenon is called *fill-in*. Here is an example you can
+    try once you have formed $A$:
+
+```{r,echo=FALSE}
+myLUFast <- function(A,tol=10^-8) {
+  n <- nrow(A)
+  L <- diag(x=1,nrow=n)  # start with L = identity matrix
+  U <- A
+  for ( k in 1:(n-1) ) {
+    pivot <- U[k,k]
+    if (abs(pivot) < tol) stop('zero pivot encountered')
+    mults <- U[(k+1):n,k]/pivot
+    U[(k+1):n,k] <- 0
+    U[(k+1):n,(k+1):n] <- U[(k+1):n,(k+1):n]-mults%o%U[k,(k+1):n]
+    L[(k+1):n,k] <- mults
+  }
+  return(list(L=L,U=U))
+}
+```
+
+    ```{r}
+       
+    out <- myLUFast(as.matrix(A))
+    L <- as(out$L,"sparseMatrix")
+    U <- as(out$U,"sparseMatrix")
+    image(A)
+    image(L)
+    image(U)
+
+    ```
+
+Can we find triangular matrices $L$ and $U$ that are sparser and still
+satisfy $A=LU$? No, recall that the factorization is unique. Instead,
+one approach is to force $L$ and $U$ to be sparser, but have $LU$ only
+approximate $A$.
+
+Your main task is to write a function `mySparseLU` that returns a lower
+unit triangular matrix $L$ and an upper triangular matrix $U$ such that
+$L$ and $U$ only have off-diagonal non-zeros entries in the locations
+where $A$ has off-diagonal non-zero entries. In the following pseudocode
+for the algorithm, $NZ(A)$ is the set of indices of non-zero entries of
+$A$. For example, if $A(3,4)\neq 0$, then $(3,4)\in NZ(A)$.
+
+### Pseudocode for Sparse LU Approximate Factorization
+
+Input: $A$
+
+Output: $L$ (lower unit triangular) and $U$ (upper triangular)
+
+1.  **for** $i=2,3,\ldots,n$ **do**
+2.  $~~~$ **for** $k=1,2,\ldots,i-1$ and for $(i,k)\in NZ(A)$ **do**
+3.  $~~~~~~~~~~~A_{ik}={A_{ik}}~/~{A_{kk}}$
+4.  $~~~~~~~~~~~$**for** $j=k+1,\ldots,n$ and for $(i,j)\in NZ(A)$
+    **do**
+5.  $~~~~~~~~~~~~~~~~~A_{ij}=A_{ij}-A_{ik}A_{kj}$
+6.  $~~~~~~~~~~~$**end for**
+7.  $~~~$ **end for**
+8.  **end for**
+9.  Let $U$ be the upper triangular part of $A$ (including the diagonal)
+10. Let $L$ be the strictly lower triangular part of $A$ (not including
+    the diagonal)
+11. Set every element of the diagonal of $L$ to be 1
+
+Your function `mySparseLU(A)` should return a list containing $L$ and
+$U$.
+
+Test it by activating the following code:
+
+    out <- mySparseLU(A)
+    image(out$L)
+    image(out$U)
+
+::: answer
+```{r}
+
+mySparseLU = function(A){
+  
+  n <- nrow(A)
+  for(i in 2:n){
+    for(k in 1:(i-1)){
+      if(A[i,k] != 0){
+        A[i,k] = A[i,k]/A[k,k]
+        for(j in (k+1)){
+          if(A[i,j] != 0){
+            A[i,j] = A[i,j] - A[i,k]*A[k,j]
+          }
+        }
+      }
+    }
+  }
+  U = triu(A)
+  L = tril(A, -1)
+  for(i in 1:n){
+    L[i,i] = 1
+  }
+  
+
+  return(list(L=L,U=U))
+}
+
+
+A = sparsePattern(3,3)
+
+out <- mySparseLU(A)
+image(out$L)
+image(out$U)
+
+```
+:::

@@ -1,0 +1,5 @@
+"0","P4Data$y.cs<-y.cs"
+"0","ggplot(P4Data,aes(x=xx,y=yy))+"
+"0","  geom_point()+xlab(""x"")+ylab(""y"")+"
+"0","  geom_line(aes(x=xx,y=y.c),col=""orange"",size=1.5)+"
+"0","  geom_line(aes(x=xx,y=y.cs),col=""dodgerblue"",size=1.5)"

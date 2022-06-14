@@ -1,0 +1,536 @@
+---
+title: "Computational Linear Algebra: Midterm 2"
+author: "Vichearith Meas"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    toc: no
+    toc_float: yes
+    toc_depth: 2
+    theme: cerulean
+---
+
+***Due Tuesday, April 12, 2022, beginning of class. Please submit an html (or pdf) of your completed computational work on Moodle, and bring your written answers to class.***
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+require(Matrix)
+require(tidyverse)
+require(splines)
+```
+
+The following line sources functions from the class file `365Functions.r`. Feel free to use any of these functions.
+
+```{r,message=FALSE,warning=FALSE,eval=FALSE}
+source('https://www.macalester.edu/~dshuman1/365/365Functions.r')
+```
+
+## Problem 1
+
+Write your answers on the paper (preferred) or type them here, making sure to highlight your TRUE/FALSE answer for each part and briefly justify your answers.
+
+$$
+u = 
+\begin{pmatrix}
+\frac{1}{3} \\
+\frac{2}{3}\\ 
+\frac{2}{3}
+\end{pmatrix}
+v = 
+\begin{pmatrix}
+\frac{2}{3} \\
+-\frac{1}{3}\\ 
+\frac{2}{3}
+\end{pmatrix} \\
+P = uu^T + vv^T 
+$$
+
+```{r}
+p1_u = c(1/3, 2/3, 2/3)
+p1_v =  c(2/3, -1/3, 2/3)
+
+P = p1_u%*%t(p1_u) + p1_v%*%t(p1_v)
+
+P_T = t(P)
+P_2 = P^2
+
+P
+P_T
+P_2
+```
+
+$$ P = P^T \neq P^2$$
+
+\
+
+## Problem 2
+
+There are three parts. Write your answers on the paper (preferred) or type them here.
+
+\
+
+## Problem 3
+
+Your final answers in each subproblem should be matrices and vectors of numbers (not symbols like A, P, or z).
+
+Make sure to explain each step of your work (either on the paper or here in your knitted html document).
+
+**Answer (a)**
+
+A project $P$ of $A = \begin{pmatrix}6&-5&3 &-2 \\4& -5& 1& -1\\2& 5  &5 &-2\end{pmatrix}$ has rank 2. The row space of $A$ is spanned by vector $$A_R = \Big \{ 
+\begin{pmatrix} 6 \\ -5 \\ 3 \\ -2\end{pmatrix}, 
+\begin{pmatrix} 4 \\ -5 \\ 3 \\ -1\end{pmatrix}
+\Big \}$$
+
+We can compute the orthogonal projection matrix of $A$ onto row space of $A$: 
+$$ P_R = A_R(A_R^TA_R)^{-1}A_R^T $$
+
+
+```{r message=FALSE, warning=FALSE, paged.print=FALSE}
+library(pracma)
+# Determine the Rank of A
+p3_A = cbind(c(6,-5,3,-2), c(4,-5,1,-1), c(2, 5  ,5 ,-2)) 
+Rank(p3_A)
+
+# The basis of Row space of A
+p3_AR = cbind(c(6,-5,3,-2), c(4,-5,1,-1)) 
+
+# Row space projection Pr
+(p3_PR = p3_AR%*%solve(t(p3_AR)%*%p3_AR)%*%t(p3_AR))
+
+# QR decomposition to double check
+out = qr(p3_AR)
+Q = qr.Q(out)
+R = qr.R(out)
+(Q%*%t(Q))
+
+
+```
+
+$$
+P_R = 
+\begin{pmatrix} 
+ 0.5263158 & -0.26315789&  0.3684211& -0.21052632\\
+-0.2631579 &  0.84586466  &0.2443609& -0.03759398\\
+ 0.3684211 &  0.24436090  &0.5150376& -0.23308271\\
+-0.2105263 & -0.03759398& -0.2330827&  0.11278195
+\end{pmatrix}
+$$
+
+**Answer (b)**
+The basis of the null space of A are vectors that orthogonal to the basis of row space of $A$.
+
+From $QR$ decomposition of $A_R$ in (a), we have the orthonormal vectors $q_1$ and $q_2$ of row space $A$. To find the other basis of null space of A, we can use the Gram-Schmidt orthogonalization using a vector $v_3$  that is linearly independent from the basis of $A_R$. Let $v_3 = \begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix}$.
+
+
+\begin{align*}
+y_3 &= v_3 - (q_1q_1^Tv_3  + q_2q_2^Tv_3) \\
+&= \begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix} - \Bigg( \begin{pmatrix}-0.6974858 \\  0.5812382\\ -0.3487429\\  0.2324953 \end{pmatrix}\begin{pmatrix}-0.6974858 \\  0.5812382\\ -0.3487429\\  0.2324953 \end{pmatrix}^T\begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix}  + \begin{pmatrix} -0.1995728 \\ -0.7127600 \\ -0.6272288 \\  0.2423384 \end{pmatrix} \begin{pmatrix} -0.1995728 \\ -0.7127600 \\ -0.6272288 \\  0.2423384 \end{pmatrix}^T\begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix} \Bigg) \\
+&= \begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix} - \Bigg( \begin{pmatrix}-0.6974858 \\  0.5812382\\ -0.3487429\\  0.2324953 \end{pmatrix} \begin{pmatrix}-0.6974858\end{pmatrix} + \begin{pmatrix} -0.1995728 \\ -0.7127600 \\ -0.6272288 \\  0.2423384 \end{pmatrix} \begin{pmatrix}-0.1995728\end{pmatrix} \Bigg) \\
+&= \begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix} - \Bigg( \begin{pmatrix}0.48648 \\ -0.40540 \\ 0.24324 \\ -0.16216 \end{pmatrix} + \begin{pmatrix}0.03982 \\ 0.14224 \\ 0.12517 \\ -0.04836 \end{pmatrix} \Bigg) \\
+&= \begin{pmatrix} 1 \\ 0 \\0 \\0 \end{pmatrix} - \begin{pmatrix}0.5263\\ -0.26316\\ 0.36841\\ -0.21052\end{pmatrix}\\
+&= \begin{pmatrix}0.4737\\ 0.26316\\ -0.36841\\ 0.21052\end{pmatrix}\\
+
+||y_3||_2 &= \sqrt{0.4737^2+0.26316^2+\left(-0.36841\right)^2+0.21052^2} \\
+&=0.68825 \\
+
+q_3 &= \frac{1}{||y_3||_2}y_3 \\
+ &= \frac{1}{0.68825}\begin{pmatrix}0.4737\\ 0.26316\\ -0.36841\\ 0.21052\end{pmatrix} \\
+ &= \begin{pmatrix}0.69 \\ 0.38 \\ -0.54\\ 0.31 \end{pmatrix} \\
+\end{align*}
+
+
+```{r}
+q2 = c( -0.1995728, -0.7127600, -0.6272288,  0.2423384)
+q1 = c( -0.6974858,  0.5812382, -0.3487429,  0.2324953)
+q3 = c(0.68826, 0.38236, -0.53528,0.30587)
+
+q1%*%q2
+q3%*%q2
+q3%*%q1
+
+```
+
+
+**Answer (c)**
+
+We have $A_N = span \Bigg\{\begin{pmatrix}0.69 \\ 0.38 \\ -0.54\\ 0.31 \end{pmatrix}\Bigg\}$. 
+
+The projection onto null space of A:  
+$$
+\begin{align*}
+P_N &= A_N(A_N^TA_N)^{-1}A_N^T \\
+&= \begin{pmatrix}
+0.6316275 \\ 0.3508980\\ -0.4912352\\  0.2807019
+\end{pmatrix}
+\end{align*}
+$$
+
+```{r}
+p3_AN = cbind(c(0.68826, 0.38236, -0.53528,0.30587))
+
+p3_PN = p3_AN%*%solve(t(p3_AN)%*%p3_AN)%*%t(p3_AN)
+z = c(2,0,2,2)
+
+p3_PNz = p3_PN%*%z
+```
+
+We know that $P_Nz$ is in the null space of $A$ if there exist a scalar $c$ such that $P_nz = cq_3$. In this $z$, we have $c =  0.917716$ which $\begin{pmatrix} 2\\0\\2\\2\end{pmatrix}= (0.917716)\begin{pmatrix}0.69 \\ 0.38 \\ -0.54\\ 0.31 \end{pmatrix}$
+```{r}
+pnz =  c(0.6316275,  0.3508980, -0.4912352,  0.2807019)
+c  = pnz/q3
+c
+```
+
+
+**Answer (d)**
+
+The $P_R + P_N$ is an identity matrix because $(P_R + P_N)v = P_Rv + P_Nv$ a combination of projection of $v$ on the row space and projection of null space which  reassembles the original vector $v$.  
+
+\
+
+## Problem 4
+
+```{r,echo=FALSE}
+# The following lines generate the 400 data points:
+set.seed(365)
+xx<-c(0,100*runif(398),100)
+n.points<-length(xx)
+yy<-sin(xx/18+pi/4)+.7*cos(xx/8)+.1*sin(xx/5)+2*runif(n.points)
+P4Data<-data.frame(xx=xx,yy=yy)
+```
+
+You can access the 400 x-values via `P4Data$xx` and the 400 y-values via `P4Data$yy`. Here is a plot of the data:
+
+```{r,echo=FALSE}
+ggplot(P4Data,aes(x=xx,y=yy))+geom_point()+xlab("x")+ylab("y")
+```
+
+### Polynomial interpolation
+
+(a) Here is the way to generate 7 random sample indices between 1 and 400:
+
+```{r}
+set.seed(365)
+num_samples<-7
+(samp_ind<-sample(1:400,size=num_samples))
+```
+
+To generate a new set of random sample indices, just change the seed:
+
+```{r}
+set.seed(0412)
+(samp_ind<-sample(1:400,size=num_samples))
+```
+
+Store the y-values of your interpolating polynomial at each of the x-values of `P4Data$xx` in `y.interp` and then activate this code chunk to plot your predicted values on top of the data:
+
+    P4Data$y.interp<-y.interp
+    ggplot(P4Data,aes(x=xx,y=yy))+
+      geom_point()+xlab("x")+ylab("y")+
+      geom_line(aes(x=xx,y=y.interp),col="red",size=1.5)
+      
+**Answer (a)**
+
+```{r}
+# load source for interpolator fuctions
+source('https://www.macalester.edu/~dshuman1/365/365Functions.r')
+
+# function for y
+p1a_function <- function(x) sin(x/18+pi/4)+.7*cos(x/8)+.1*sin(x/5)+2*runif(length(x))
+
+#  sample 7 point indices
+set.seed(789)
+num_samples<-7
+samp_ind<-sample(1:400,size=num_samples)
+# get value to x
+p4a_x = P4Data$xx[samp_ind]
+
+# get prediction for sample points 
+p4a_y = p1a_function(p4a_x)
+ 
+#  Interpolation
+y.interp = Interpolator(p4a_x,p4a_y, xx, Itype = 'NewtonDD')
+
+P4Data$y.interp<-y.interp
+ggplot(P4Data,aes(x=xx,y=yy))+
+  geom_point()+xlab("x")+ylab("y")+
+  geom_line(aes(x=xx,y=y.interp),col="red",size=1.5)
+```
+
+
+(b) **Answer (b)**
+
+The interpolating polynomial changes every time with every  new seed (new sample indices), therefore, new $x$ used for interpolation. Depending on there the sample data points are, the interpolating polynomial can range from partially fits to completely off. 
+
+\
+
+### Least squares cubic fit
+
+(c) Store the y-predictions from your least squares cubic polynomial model in `y.c` and then activate this code chunk to plot your predicted values on top of the data:
+
+```{=html}
+<!-- -->
+```
+    P4Data$y.c<-y.c
+    ggplot(P4Data,aes(x=xx,y=yy))+
+      geom_point()+xlab("x")+ylab("y")+
+      geom_line(aes(x=xx,y=y.c),col="orange",size=1.5)
+
+
+**Answer (c)**
+
+```{r}
+p4c_A = cbind(intercept = rep(1, length(P4Data$xx)), x = P4Data$xx, x2 = P4Data$xx^2, x3 = P4Data$xx^3)
+p4c_AT = t(p4c_A)
+
+coeffs = solve(p4c_AT %*% p4c_A, p4c_AT %*% P4Data$yy)
+
+p4c_cubic_f = function(x){
+  A = cbind(intercept = rep(1, length(x)), x = x, x2 = x^2, x3 = x^3)
+  return(A%*%coeffs)
+}
+
+y.c = p4c_cubic_f(xx)
+
+P4Data$y.c<-y.c
+ggplot(P4Data,aes(x=xx,y=yy))+
+  geom_point()+xlab("x")+ylab("y")+
+  geom_line(aes(x=xx,y=y.c),col="orange",size=1.5)
+
+```
+
+\
+
+### Least squares cubic spline fit
+
+(d) Here is a plot of the seven basis functions for all cubic splines on the interval [0,100] with knots at 0,25,50,75, and 100:
+
+```{r,echo=FALSE}
+xf<-seq(0,100,by=.001)
+Bc<-bs(xf,knot=c(25,50,75),intercept=TRUE,Boundary.knots=c(0,100))
+SplineData<-data.frame(xx=xf,Bc)
+colnames(SplineData)<-c('xf','b1','b2','b3','b4','b5','b6','b7')
+SplineDataNarrow<-SplineData%>%
+  gather(key=spline_num,value=y,b1,b2,b3,b4,b5,b6,b7)
+ggplot(SplineDataNarrow,aes(x=xf,y=y))+
+  geom_line(aes(x=xf,y=y,group=spline_num,col=spline_num),size=1.5)+xlab("x")+ylab("y")+
+  ggtitle("Cubic Spline Basis Functions")
+```
+
+The entry $B_{ij}$ of the following matrix $B$ is equal to the $j^{th}$ basis function from above evaluated at the point $x_i$ from the data set, with $i$ running from 1 to 400. Thus, each column of $B$ represents a single cubic spline basis function evaluated at all of the $x_i$'s:
+
+```{r}
+B<-bs(P4Data$xx,knot=c(25,50,75),intercept=TRUE,Boundary.knots=c(0,100))
+```
+
+Store the predictions from your least squares cubic spline model in `y.cs` and then activate this code chunk to plot your predicted values on top of the data:
+
+    P4Data$y.cs<-y.cs
+    ggplot(P4Data,aes(x=xx,y=yy))+
+      geom_point()+xlab("x")+ylab("y")+
+      geom_line(aes(x=xx,y=y.c),col="orange",size=1.5)+
+      geom_line(aes(x=xx,y=y.cs),col="dodgerblue",size=1.5)
+      
+**Answer (d)**
+
+```{r}
+p4d_S = B
+p4d_ST = t(p4d_S)
+
+p4d_S_coeffs = solve(p4d_ST %*% p4d_S, p4d_ST %*% P4Data$yy)
+
+y.cs = p4d_S%*%p4d_S_coeffs
+
+```
+
+```{r}
+P4Data$y.cs<-y.cs
+ggplot(P4Data,aes(x=xx,y=yy))+
+  geom_point()+xlab("x")+ylab("y")+
+  geom_line(aes(x=xx,y=y.c),col="orange",size=1.5)+
+  geom_line(aes(x=xx,y=y.cs),col="dodgerblue",size=1.5)
+```
+
+
+(e) TRUE/FALSE and brief justification.
+
+**Answer (e)**
+
+**TRUE** Because the cubic spline approximation get spitted into chunk at the knots across the interval. This allows the spline to be flexible to local data each chunk of interval. In another word, each local interval get a cubic function to interpolate the local data. This allows each spline to adapt minimize the error more as it can flex according to local data.  The Cubic spline is the combination of all these local cubic interpolation functions.  
+
+\
+
+### Local linear regression
+
+(f) Write your answer here (preferred) or on your paper.
+
+**Answer (f)**
+
+$$
+\begin{align*}
+w_i[y_i - (\beta_0 + \beta_1x_i)]^2 
+&= [(\sqrt{w_i}y_i - \sqrt{w_i}(\beta_0 + \beta_1x_i)]^2 \\
+&= [( \sqrt{w_i}(\beta_0 + \beta_1x_i) - \sqrt{w_i}y_i]^2 \\
+\min_{\beta_0,\beta_1}\sum_{i=1}^{m} w_i[y_i - (\beta_0 + \beta_1x_i)]^2 &= \Bigg\|
+\begin{bmatrix}
+\vdots & \vdots \\
+\sqrt{w_i} &  \sqrt{w_i}x_i\\
+\vdots & \vdots \\
+\end{bmatrix}\begin{bmatrix}\beta_0 \\ \beta_1\end{bmatrix}- \sqrt{w_i}y_i \Bigg\|_2
+^2 \\
+&= \Bigg\| \hat A \begin{bmatrix}\beta_0 \\ \beta_1 \end{bmatrix} - z \Bigg\|_2^2
+\end{align*}
+\\
+$$
+$$
+\hat A = \begin{bmatrix}
+\vdots & \vdots \\
+\sqrt{w_i} &  \sqrt{w_i}x_i\\
+\vdots & \vdots \\
+\end{bmatrix} ; 
+z =  \begin{bmatrix}
+\vdots \\
+\sqrt{w_i}y_i\\
+\vdots  \\
+\end{bmatrix} 
+$$
+
+(g) Complete the following function:
+
+**Answer (g)
+
+```{r}
+find.local.line<-function(x0,sigma,xx,yy){
+# Insert your code here and then activate the next chunk and uncomment the two lines in the following chunk
+  w_sqrt_root = sqrt(exp(-(xx - x0)^2 / 2*sigma^2))
+  A_hat = cbind(w_sqrt_root , w_sqrt_root*xx)
+  z = cbind(w_sqrt_root*yy)
+  A_hat_T = t(A_hat)
+  coeff =  solve(A_hat_T %*% A_hat, A_hat_T %*% yy)
+  
+  fx = function(xx){
+    A = cbind(rep(1, length(xx)), xx)
+    pred = A%*%coeff
+  return(pred)
+  }
+  
+  return(fx)
+}
+```
+
+    index0<-250
+    index1<-350
+    x0<-xx[index0]
+    x1<-xx[index1]
+    plot.local.lines<-function(sigma,x0,x1,xx,yy){
+      fx0<-find.local.line(x0,sigma,xx,yy)
+      P4Data$l0<-fx0(xx)
+      P4Data$k0<-exp(-(xx-x0)^2/(2*sigma^2))
+      fx1<-find.local.line(x1,sigma,xx,yy)
+      P4Data$l1<-fx1(xx)
+      P4Data$k1<-exp(-(xx-x1)^2/(2*sigma^2))
+      LocLinPred<-data.frame(x=c(x0,x1),y=c(fx0(x0),fx1(x1)))
+      ggplot(P4Data,aes(x=xx,y=yy))+
+        geom_point()+xlab("x")+ylab("y")+
+        geom_line(aes(x=xx,y=l0),col="goldenrod2",size=1.5)+
+        geom_line(aes(x=xx,y=k0),col="goldenrod2",size=1.5,linetype="dashed")+
+        geom_line(aes(x=xx,y=l1),col="lightseagreen",size=1.5)+
+        geom_line(aes(x=xx,y=k1),col="lightseagreen",size=1.5,linetype="dashed")+
+        ylim(-1.5,3.5)+
+        geom_point(data=LocLinPred,aes(x=x,y=y),col="red",size=4)
+    }
+
+```{r, warning=FALSE}
+# uncomment these two lines 
+index0<-250
+index1<-350
+x0<-xx[index0]
+x1<-xx[index1]
+
+plot.local.lines<-function(sigma,x0,x1,xx,yy){
+  
+  fx0<-find.local.line(x0,sigma,xx,yy)
+  P4Data$l0<-fx0(xx)
+  P4Data$k0<-exp(-(xx-x0)^2/(2*sigma^2))
+  fx1<-find.local.line(x1,sigma,xx,yy)
+  P4Data$l1<-fx1(xx)
+  P4Data$k1<-exp(-(xx-x1)^2/(2*sigma^2))
+  LocLinPred<-data.frame(x=c(x0,x1),y=c(fx0(x0),fx1(x1)))
+  ggplot(P4Data,aes(x=xx,y=yy))+
+    geom_point()+xlab("x")+ylab("y")+
+    geom_line(aes(x=xx,y=l0),col="goldenrod2",size=1.5)+
+    geom_line(aes(x=xx,y=k0),col="goldenrod2",size=1.5,linetype="dashed")+
+    geom_line(aes(x=xx,y=l1),col="lightseagreen",size=1.5)+
+    geom_line(aes(x=xx,y=k1),col="lightseagreen",size=1.5,linetype="dashed")+
+    ylim(-1.5,3.5)+
+    geom_point(data=LocLinPred,aes(x=x,y=y),col="red",size=4)
+}
+
+sigma<-5
+plot.local.lines(sigma,x0,x1,xx,yy)
+
+
+
+```
+
+(h) Complete the following function:
+
+
+
+and then activate this chunk:
+
+    plot.smoother<-function(sigma){
+      kernel.smoother.wrap<-function(z){kernel.smoother(z,sigma,xx,yy)}
+      ks.predictions<-sapply(xx,kernel.smoother.wrap)
+      P4Data$y.ks<-ks.predictions
+      ggplot(P4Data,aes(x=xx,y=yy))+
+        geom_point()+xlab("x")+ylab("y")+
+        geom_line(aes(x=xx,y=y.c),col="orange",size=1.5)+
+        geom_line(aes(x=xx,y=y.cs),col="dodgerblue",size=1.5)+
+        geom_line(aes(x=xx,y=y.ks),col="red",size=1.5)
+    }
+    plot.smoother(sigma)
+    
+**Answer (h)**
+
+```{r}
+kernel.smoother<-function(xj,sigma,xx,yy){
+# insert your code here and then activate the next chunk
+  fj <- find.local.line(xj,sigma,xx,yy)
+  return(fj(xj))
+}
+```
+```{r}
+plot.smoother<-function(sigma){
+  kernel.smoother.wrap<-function(z){kernel.smoother(z,sigma,xx,yy)}
+  ks.predictions<-sapply(xx,kernel.smoother.wrap)
+  P4Data$y.ks<-ks.predictions
+  ggplot(P4Data,aes(x=xx,y=yy))+
+    geom_point()+xlab("x")+ylab("y")+
+    geom_line(aes(x=xx,y=y.c),col="orange",size=1.5)+
+    geom_line(aes(x=xx,y=y.cs),col="dodgerblue",size=1.5)+
+    geom_line(aes(x=xx,y=y.ks),col="red",size=1.5)
+}
+plot.smoother(sigma)
+```
+
+
+(i) What happens as you change `sigma`?
+
+**Answer (i)**
+The line graph is smoother with smaller `sigma` value and fluctuated with a lot more noise with greater value. 
+```{r}
+
+plot.smoother(0.125)
+plot.smoother(0.25)
+plot.smoother(0.5)
+plot.smoother(1)
+plot.smoother(2)
+plot.smoother(4)
+plot.smoother(5)
+plot.smoother(6)
+plot.smoother(7)
+
+```
+

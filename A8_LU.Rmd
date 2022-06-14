@@ -1,0 +1,109 @@
+---
+title: "| Computational Linear Algebra    \n| Activity 8: LU Factorization \n"
+author: "Vichy"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    theme: cerulean
+---
+
+
+### Exercise 1: Write a function to perform LU decomposition
+
+a) Write a function `myLU(A)` that takes an $n \times n$ matrix $A$ and returns a lower unit triangular matrix $L$ and an upper triangular matrix $U$ such that $A=LU$. Recall, to return multiple variables from a function, you can create a list:
+```
+return(list(L=L,U=U))
+```
+You can check for 0 pivots, but if you find one, just stop the computations with the error command
+```
+stop('zero pivot encountered')
+```
+
+```{r}
+ 
+
+myUL = function(A){
+  if (nrow(A) != ncol(A)){
+    return('No Square Matrix')
+  }
+  
+  n = nrow(A)
+  U = A
+  L = diag(n)
+  
+  for(k in 1:(n-1)){   # RUN N-1 TIME
+    if( U[k,k] == 0){
+      stop('Zero Pivot found!')
+    }
+    
+    for(j in (k+1):n){  # PROCESS ROW: FROM PIVOT TO THE END
+      L[j,k] = U[j,k]/U[k,k]        # FOR EACH ROW IN COL, ENTRY/PIVOT
+      U[j,k:n] = U[j,k:n] - L[j,k]*U[k,k:n] 
+    }
+  }
+  
+  return(list(L= L, U=U))
+}
+
+C = matrix(1:9, nrow = 3 , ncol=3)
+CLA = myUL(C)
+CLA
+
+```
+
+
+b) Check your function on the example from today's class:
+```{r}
+A<-cbind(c(2,4,8,6),c(1,3,7,7),c(1,3,9,9),c(0,1,5,8))
+
+ULA = myUL(A)
+ULA
+
+Already_Upper = ULA$U
+Already_Lower = ULA$L
+```
+
+c) What happens if you do an LU decomposition on a matrix that is already lower triangular or upper triangular?
+
+
+```{r}
+#  When we put in a matrix with upper triangle, 
+B_upper = rbind(
+  c(9,9,7),
+  c(0,2,8),
+  c(0,0,3)
+)
+myUL(B_upper)
+```
+
+
+```{r}
+B_lower = rbind(
+  c(1,0,0),
+  c(3,4,0),
+  c(4,8,3)
+)
+myUL(B_lower)
+```
+
+
+d) Start with some interesting lower unit triangular matrix $L$ and some interesting upper triangular matrix $U$. Multiply them together to get a matrix $A$, and then run your function on $A$ to see if you recover your original $L$ and $U$.
+
+```{r}
+#  If we should get the same thing back. 
+
+print('A matrix that is already lower triangular :')
+myUL(Already_Lower)
+print('A matrix that is already upper triangular:')
+myUL(Already_Upper)
+```
+
+
+\
+
+### Exercise 2: Speeding up your code by eliminating a for loop
+
+a) How long does it take to run your `myLU` function on a 1000 x 1000 matrix with random entries?
+
+b) Can you improve the speed of your code by eliminating the inner loop?  Also try not to perform unnecessary calculations where you know ahead of time the answer will be 0. How long does the same decomposition take now?

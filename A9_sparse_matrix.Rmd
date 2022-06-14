@@ -1,0 +1,111 @@
+---
+title: "| Computational Linear Algebra    \n| Activity 9: Sparse Matrices & Symmetric Positive Definite Matrices \n"
+author: "INSERT STUDENT NAME HERE"
+output:
+  bookdown::html_document2:
+    number_sections: false
+    split_by: none
+    theme: cerulean
+---
+
+Make sure to include the matrix package:
+
+```{r,message=FALSE}
+library(Matrix)
+```
+
+### Exercise 1
+
+a)  Generate the following sparse matrix, and make sure it only takes up 1560 bytes of memory.
+
+    ```{r}
+    sparse = spMatrix(nrow=7, ncol= 7)
+    sparse[1,2] = 3.141593
+    sparse[3,1] = 1.5
+    sparse[4,3] = 1.414214
+    sparse[5,6] = -3
+    sparse
+    object.size(sparse)
+
+
+    s = spMatrix(7,7,i=c(1,3,4,5), j= c(2,1,4,6), x = c(3.141593,1.5,1.414214,-3))
+    s
+    object.size(s)
+    ```
+
+b)  Generate the following sparse matrix with just one line of `R` code.
+
+    ```{r}
+    s2 = spMatrix(16,16,i =c(1:16,4:16 ) , 
+                  j =c(1:16,rep(3, 13) ),
+                  x = c(rep(1,16),-13:-1))
+    s2
+    ```
+
+c)  Generate the following sparse matrix with just one line of R code.
+
+    ```{r}
+    s3 = spMatrix(
+        13,13,
+        i=c(8:13, 1:6, 1:13), 
+        j= c(1:6, 8:13, 13:1), 
+        x= c(6:1, 11:16, seq(0,24,2))
+    )
+    s3
+    ```
+
+\
+
+### Exercise 2
+
+Write an `R` function `ThreeBanded(n,offset)` that generates an n × n ***sparse*** matrix with
+
+(i) the $i^{th}$ diagonal entry equal to $0.5+\sqrt{i}$;
+
+    ```{r}
+
+    ThreeBanded = function(n,offset){
+      s = spMatrix(n,n, 
+                   i= c(1:n, 2:(n), 1:(n-1)), 
+                   j= c(1:n, 1:(n-1), 2:(n)), 
+                   x= c(0.5 + sqrt(1:n),rep(1,n-1), rep(1,n-1)))
+      s[ab == offset] = 1
+      return(s)
+    }
+
+    t1 = ThreeBanded(10,4)
+    t1
+    ```
+
+(ii) the entries on the first sub-diagonal and super-diagonal (one below and above the main diagonal) all equal to 1;
+
+(iii) the entries $A_{ij}$, where $|i − j|$ =offset all equal to 1; and
+
+(iv) all other entries equal to zero.
+
+You can assume that $n \geq 4$ and $2 \leq$ `offset` $<n$.
+
+Here is an example:
+
+`> ThreeBanded(10,5)`
+
+$$\begin{bmatrix}
+1.50 & 1.00 & & & & 1.00 &  & & & \\
+1.00 & 1.91 & 1.00 & & & & 1.00  & && \\
+& 1.00 & 2.23 & 1.00  & & & & 1.00  && \\
+& & 1.00 & 2.50 & 1.00   & & &   & 1.00 & \\
+& & &  1.00 & 2.74 & 1.00    & & && 1.00\\ 
+1.00 & & & &  1.00 & 2.95 & 1.00     & &&  \\  
+& 1.00  & & & & 1.00 & 3.14 & 1.00 && \\ 
+&  & 1.00  & & & & 1.00 & 3.33 & 1.00 & \\   
+&  &  & 1.00  & & & & 1.00 & 3.50 & 1.00 \\
+&  &  & & 1.00  & & & & 1.00 & 3.66          
+\end{bmatrix}$$
+
+\
+
+### Exercise 3
+
+Show that if an $n \times n$ matrix $A$ is symmetric positive definite, then there exists an $n \times n$ symmetric positive definite matrix $B$ such that $A=B^{\top}B$.
+
+Hints: (1) Use the fact that symmetric matrices are orthogonally diagonalizable; (2) produce a diagonal matrix $C$ such that $D=C^{\top}C$; (3) let $B=PCP^{\top}$.

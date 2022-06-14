@@ -1,0 +1,3 @@
+"0","A.eigen = eigen(A)"
+"0","A.lambda = as.numeric(A.eigen$values[1])"
+"0","A.eigenvector =as.numeric( A.eigen$vectors[,1])"

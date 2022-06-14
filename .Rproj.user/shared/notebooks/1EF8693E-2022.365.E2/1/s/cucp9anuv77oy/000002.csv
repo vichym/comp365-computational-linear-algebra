@@ -1,0 +1,7 @@
+"0","p4d_S = B"
+"0","p4d_ST = t(p4d_S)"
+"0",""
+"0","p4d_S_coeffs = solve(p4d_ST %*% p4d_S, p4d_ST %*% P4Data$yy)"
+"0",""
+"0","y.cs = p4d_S%*%p4d_S_coeffs"
+"0",""

@@ -1,0 +1,10 @@
+"0","compiler_test_2_result = compiler_test_2_raw %>% "
+"0","  pivot_longer(cols = -c(trial, compiler),                "
+"0","               values_to = ""duration"","
+"0","               names_to = ""number_thread"" ) %>% "
+"0","  mutate(number_thread = as.numeric(number_thread)) %>% "
+"0","  group_by(compiler, number_thread) %>% "
+"0","  summarize(duration = median(duration),"
+"0","            compiler = as.factor(compiler))"
+"1","[38;5;232m`summarise()` has grouped output by 'compiler', 'number_thread'. You can override using the `.groups` argument.[39m
+"
